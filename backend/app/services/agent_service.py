@@ -54,6 +54,7 @@ def build_agent(
     agent = ChatAgent(
         system_message="You are a helpful AI assistant.",
         model=model,
+        stream_accumulate=False,
     )
 
     # Replay history into agent memory
@@ -72,13 +73,9 @@ async def stream_chat(
     agent: ChatAgent,
     user_message: str,
 ) -> AsyncGenerator[str, None]:
-    response = agent.step(user_message)
+    response = await agent.astep(user_message)
 
-    full_content = ""
-    for partial in response:
-        content = partial.msg.content if partial.msg else ""
-        if content and content != full_content:
-            delta = content[len(full_content):]
-            full_content = content
-            if delta:
-                yield delta
+    async for partial in response:
+        delta = partial.msg.content if partial.msg else ""
+        if delta:
+            yield delta
