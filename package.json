@@ -1,0 +1,10 @@
+{
+  "name": "cape-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "dev:frontend": "cd frontend && npm run start",
+    "dev:backend": "cd backend && python3 main.py"
+  }
+}

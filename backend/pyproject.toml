@@ -1,0 +1,16 @@
+[project]
+name = "cape-agent-backend"
+version = "0.1.0"
+description = "Cape Agent backend - FastAPI + CAMEL-AI"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "camel-ai[all]>=0.2.0",
+    "aiosqlite>=0.19.0",
+    "pydantic>=2.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"

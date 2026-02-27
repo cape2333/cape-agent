@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --color-warm-50: #FEFCF9;
+  --color-warm-100: #FAF7F2;
+  --color-warm-150: #F5F1EA;
+  --color-warm-200: #EDE8DF;
+  --color-warm-300: #DED7CB;
+  --color-warm-400: #B8AFA0;
+  --color-warm-500: #918779;
+  --color-warm-600: #6E6456;
+  --color-warm-700: #4D4538;
+  --color-warm-800: #352F25;
+  --color-warm-900: #1E1A13;
+
+  --color-accent-400: #E09B5A;
+  --color-accent-500: #D4874D;
+  --color-accent-600: #C07639;
+
+  --color-danger-500: #C0523E;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Custom scrollbar for warm theme */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D0C9BD;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B8AFA0;
+}
+
+/* Sidebar collapse/expand transition */
+.sidebar-transition {
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Override prose for light theme */
+.prose-warm {
+  --tw-prose-body: #4D4538;
+  --tw-prose-headings: #352F25;
+  --tw-prose-links: #D4874D;
+  --tw-prose-bold: #352F25;
+  --tw-prose-code: #C07639;
+  --tw-prose-pre-bg: #F5F1EA;
+  --tw-prose-pre-code: #4D4538;
+}
