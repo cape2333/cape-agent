@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Settings, Box, type LucideIcon } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
 import ProviderForm from "./ProviderForm";
+import GeneralSettings from "./GeneralSettings";
 import type { AppSettings, ProviderSettings } from "../../types";
+
+type TabId = "general" | "providers";
+
+const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
+  { id: "general", label: "General", icon: Settings },
+  { id: "providers", label: "Providers", icon: Box },
+];
 
 const SettingsModal: React.FC = () => {
   const { settings, saveSettings, showSettings, setShowSettings } = useSettings();
   const [draft, setDraft] = useState<AppSettings>(settings);
+  const [activeTab, setActiveTab] = useState<TabId>("general");
 
   useEffect(() => {
     setDraft(settings);
@@ -22,12 +31,13 @@ const SettingsModal: React.FC = () => {
 
   const removeProvider = (index: number) => {
     const updated = draft.providers.filter((_, i) => i !== index);
-    const newActive = draft.active_provider_index >= updated.length
-      ? Math.max(0, updated.length - 1)
-      : draft.active_provider_index > index
-        ? draft.active_provider_index - 1
-        : draft.active_provider_index;
-    setDraft({ providers: updated, active_provider_index: newActive });
+    const newActive =
+      draft.active_provider_index >= updated.length
+        ? Math.max(0, updated.length - 1)
+        : draft.active_provider_index > index
+          ? draft.active_provider_index - 1
+          : draft.active_provider_index;
+    setDraft({ ...draft, providers: updated, active_provider_index: newActive });
   };
 
   const addProvider = () => {
@@ -40,6 +50,11 @@ const SettingsModal: React.FC = () => {
     });
   };
 
+  const handleClose = () => {
+    setDraft(settings);
+    setShowSettings(false);
+  };
+
   const handleSave = async () => {
     await saveSettings(draft);
     setShowSettings(false);
@@ -47,66 +62,103 @@ const SettingsModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 bg-warm-900/30 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white border border-warm-200 rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-xl">
+      <div className="bg-white border border-warm-200 rounded-2xl w-full max-w-3xl h-[90vh] flex flex-col shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-warm-200">
           <h2 className="text-lg font-semibold text-warm-800">Settings</h2>
           <button
-            onClick={() => setShowSettings(false)}
+            onClick={handleClose}
             className="text-warm-400 hover:text-warm-700 transition-colors"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-warm-600">Model Providers</h3>
-            <button
-              onClick={addProvider}
-              className="flex items-center gap-1 text-sm text-accent-500 hover:text-accent-600 font-medium"
-            >
-              <Plus size={14} />
-              Add
-            </button>
+        {/* Body: Sidebar + Content */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left sidebar */}
+          <nav className="w-48 flex-shrink-0 bg-warm-50 border-r border-warm-200 p-3 space-y-1">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-white text-warm-800 shadow-sm border border-warm-200"
+                      : "text-warm-500 hover:text-warm-700 hover:bg-warm-100"
+                  }`}
+                >
+                  <Icon size={16} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Right content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {activeTab === "general" && (
+              <GeneralSettings draft={draft} onUpdate={setDraft} />
+            )}
+
+            {activeTab === "providers" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-warm-600">
+                    Model Providers
+                  </h3>
+                  <button
+                    onClick={addProvider}
+                    className="flex items-center gap-1 text-sm text-accent-500 hover:text-accent-600 font-medium"
+                  >
+                    <Plus size={14} />
+                    Add
+                  </button>
+                </div>
+
+                {draft.providers.map((prov, i) => (
+                  <ProviderForm
+                    key={i}
+                    provider={prov}
+                    index={i}
+                    isActive={i === draft.active_provider_index}
+                    onUpdate={updateProvider}
+                    onRemove={removeProvider}
+                    onSetActive={(idx) =>
+                      setDraft({ ...draft, active_provider_index: idx })
+                    }
+                  />
+                ))}
+
+                {draft.providers.length === 0 && (
+                  <p className="text-sm text-warm-400 text-center py-4">
+                    No providers configured. Add one to get started.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
-
-          {draft.providers.map((prov, i) => (
-            <ProviderForm
-              key={i}
-              provider={prov}
-              index={i}
-              isActive={i === draft.active_provider_index}
-              onUpdate={updateProvider}
-              onRemove={removeProvider}
-              onSetActive={(idx) =>
-                setDraft({ ...draft, active_provider_index: idx })
-              }
-            />
-          ))}
-
-          {draft.providers.length === 0 && (
-            <p className="text-sm text-warm-400 text-center py-4">
-              No providers configured. Add one to get started.
-            </p>
-          )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-warm-200 flex justify-end gap-3">
-          <button
-            onClick={() => setShowSettings(false)}
-            className="px-4 py-2 text-sm text-warm-500 hover:text-warm-700 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-5 py-2 text-sm bg-accent-500 hover:bg-accent-600 text-white rounded-xl font-medium transition-colors"
-          >
-            Save
-          </button>
+        <div className="px-6 py-4 border-t border-warm-200 flex justify-end">
+          <div className="flex gap-3">
+            <button
+              onClick={handleClose}
+              className="px-4 py-2 text-sm text-warm-500 hover:text-warm-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-5 py-2 text-sm bg-accent-500 hover:bg-accent-600 text-white rounded-xl font-medium transition-colors"
+            >
+              Save
+            </button>
+          </div>
         </div>
       </div>
     </div>

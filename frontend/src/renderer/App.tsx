@@ -11,20 +11,41 @@ import { initApiUrl } from "./services/api";
 const App: React.FC = () => {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
+  const theme = useStore((s) => s.settings.theme);
   const { createNew } = useConversations();
 
   useEffect(() => {
     initApiUrl();
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else if (theme === "light") {
+      root.classList.remove("dark");
+    } else {
+      // system
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      const apply = () => {
+        mq.matches ? root.classList.add("dark") : root.classList.remove("dark");
+      };
+      apply();
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+  }, [theme]);
+
   return (
     <div className="flex h-full bg-warm-100 text-warm-800">
       <div
         className="sidebar-transition flex-shrink-0 overflow-hidden"
-        style={{ width: sidebarCollapsed ? 0 : 256 }}
+        style={{ width: sidebarCollapsed ? 0 : 268 }}
       >
-        <div className="w-64 h-full">
-          <Sidebar />
+        <div className="h-full p-1.5" style={{ width: 268 }}>
+          <div className="h-full bg-white rounded-2xl border border-warm-200 shadow-sm overflow-hidden">
+            <Sidebar />
+          </div>
         </div>
       </div>
       <div className="flex-1 flex flex-col min-w-0">

@@ -23,6 +23,7 @@ export interface ProviderSettings {
 export interface AppSettings {
   providers: ProviderSettings[];
   active_provider_index: number;
+  theme: 'light' | 'dark' | 'system';
 }
 
 export interface ChatRequest {

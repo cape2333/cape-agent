@@ -18,6 +18,7 @@ out/
 dist/
 
 # === Vite ===
+.vite/
 *.timestamp-*
 
 # === TypeScript ===
@@ -59,6 +60,9 @@ htmlcov/
 .pytest_cache/
 .coverage
 .coverage.*
+
+# === Runtime ===
+.backend_port
 
 # === Misc ===
 *.tgz

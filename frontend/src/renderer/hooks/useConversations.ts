@@ -8,9 +8,9 @@ export function useConversations() {
     activeConversationId,
     setConversations,
     setActiveConversation,
+    switchConversation,
     addConversation,
     removeConversation,
-    setMessages,
   } = useStore();
 
   const loadConversations = useCallback(async () => {
@@ -26,11 +26,11 @@ export function useConversations() {
 
   const select = useCallback(
     async (id: string) => {
-      setActiveConversation(id);
+      if (id === activeConversationId) return;
       const msgs = await api.fetchMessages(id);
-      setMessages(msgs);
+      switchConversation(id, msgs);
     },
-    [setActiveConversation, setMessages]
+    [activeConversationId, switchConversation]
   );
 
   const remove = useCallback(

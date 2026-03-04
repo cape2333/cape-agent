@@ -1,4 +1,6 @@
+import socket
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
@@ -36,5 +38,25 @@ async def health():
     return {"status": "ok"}
 
 
+def find_free_port(preferred: int = 8001) -> int:
+    """Try the preferred port first; if busy, let the OS pick a free one."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", preferred))
+        sock.close()
+        return preferred
+    except OSError:
+        sock.close()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        sock.close()
+        return port
+
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True)
+    port = find_free_port(8001)
+    port_file = Path(__file__).resolve().parent.parent / ".backend_port"
+    port_file.write_text(str(port))
+    print(f"Backend starting on port {port}")
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)

@@ -7,6 +7,7 @@ interface AppState {
   activeConversationId: string | null;
   setConversations: (conversations: Conversation[]) => void;
   setActiveConversation: (id: string | null) => void;
+  switchConversation: (id: string, messages: Message[]) => void;
   addConversation: (conv: Conversation) => void;
   removeConversation: (id: string) => void;
 
@@ -15,12 +16,11 @@ interface AppState {
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
 
-  // Streaming
-  isStreaming: boolean;
-  streamingContent: string;
-  setIsStreaming: (streaming: boolean) => void;
-  appendStreamChunk: (chunk: string) => void;
-  finalizeStream: (fullContent: string, conversationId: string) => void;
+  // Streaming (per-conversation)
+  streamingStates: Record<string, { isStreaming: boolean; content: string }>;
+  startStreaming: (conversationId: string) => void;
+  appendStreamChunk: (conversationId: string, chunk: string) => void;
+  finalizeStream: (conversationId: string, fullContent: string) => void;
 
   // Sidebar
   sidebarCollapsed: boolean;
@@ -38,7 +38,8 @@ export const useStore = create<AppState>((set) => ({
   conversations: [],
   activeConversationId: null,
   setConversations: (conversations) => set({ conversations }),
-  setActiveConversation: (id) => set({ activeConversationId: id, messages: [], streamingContent: "" }),
+  setActiveConversation: (id) => set({ activeConversationId: id, messages: [] }),
+  switchConversation: (id, messages) => set({ activeConversationId: id, messages }),
   addConversation: (conv) =>
     set((s) => ({ conversations: [conv, ...s.conversations] })),
   removeConversation: (id) =>
@@ -52,27 +53,48 @@ export const useStore = create<AppState>((set) => ({
   setMessages: (messages) => set({ messages }),
   addMessage: (message) => set((s) => ({ messages: [...s.messages, message] })),
 
-  // Streaming
-  isStreaming: false,
-  streamingContent: "",
-  setIsStreaming: (streaming) => set({ isStreaming: streaming, streamingContent: streaming ? "" : "" }),
-  appendStreamChunk: (chunk) =>
-    set((s) => ({ streamingContent: s.streamingContent + chunk })),
-  finalizeStream: (fullContent, conversationId) =>
+  // Streaming (per-conversation)
+  streamingStates: {},
+  startStreaming: (conversationId) =>
     set((s) => ({
-      isStreaming: false,
-      streamingContent: "",
-      messages: [
-        ...s.messages,
-        {
-          id: `msg-${Date.now()}`,
-          conversation_id: conversationId,
-          role: "assistant" as const,
-          content: fullContent,
-          created_at: new Date().toISOString(),
-        },
-      ],
+      streamingStates: {
+        ...s.streamingStates,
+        [conversationId]: { isStreaming: true, content: "" },
+      },
     })),
+  appendStreamChunk: (conversationId, chunk) =>
+    set((s) => {
+      const current = s.streamingStates[conversationId];
+      if (!current) return {};
+      return {
+        streamingStates: {
+          ...s.streamingStates,
+          [conversationId]: { ...current, content: current.content + chunk },
+        },
+      };
+    }),
+  finalizeStream: (conversationId, fullContent) =>
+    set((s) => {
+      const { [conversationId]: _, ...rest } = s.streamingStates;
+      const isActive = s.activeConversationId === conversationId;
+      return {
+        streamingStates: rest,
+        ...(isActive
+          ? {
+              messages: [
+                ...s.messages,
+                {
+                  id: `msg-${Date.now()}`,
+                  conversation_id: conversationId,
+                  role: "assistant" as const,
+                  content: fullContent,
+                  created_at: new Date().toISOString(),
+                },
+              ],
+            }
+          : {}),
+      };
+    }),
 
   // Sidebar
   sidebarCollapsed: false,
@@ -82,6 +104,7 @@ export const useStore = create<AppState>((set) => ({
   settings: {
     providers: [{ provider: "openai", model: "gpt-4o-mini", api_key: "" }],
     active_provider_index: 0,
+    theme: "system",
   },
   setSettings: (settings) => set({ settings }),
   showSettings: false,

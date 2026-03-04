@@ -20,6 +20,27 @@
   --color-danger-500: #C0523E;
 }
 
+/* Dark mode overrides */
+.dark {
+  --color-warm-50: #1E1A13;
+  --color-warm-100: #252017;
+  --color-warm-150: #2E281F;
+  --color-warm-200: #3A332A;
+  --color-warm-300: #4D4538;
+  --color-warm-400: #6E6456;
+  --color-warm-500: #918779;
+  --color-warm-600: #B8AFA0;
+  --color-warm-700: #DED7CB;
+  --color-warm-800: #F5F1EA;
+  --color-warm-900: #FEFCF9;
+
+  --color-accent-400: #E09B5A;
+  --color-accent-500: #D4874D;
+  --color-accent-600: #E09B5A;
+
+  --color-danger-500: #E06550;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -50,7 +71,55 @@ body {
 
 /* Sidebar collapse/expand transition */
 .sidebar-transition {
-  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* Chat messages fade-in animation on conversation switch */
+@keyframes chat-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-chat-fade-in {
+  animation: chat-fade-in 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Thinking cat spin animation */
+@keyframes cat-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 添加到你的 CSS 文件中 */
+@keyframes maxwell-spin {
+  0% { transform: scaleX(1); }
+  25% { transform: scaleX(0); }
+  50% { transform: scaleX(-1); }
+  75% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+
+.animate-cat-spin {
+  /* 这里的 2s 是旋转速度，linear 是匀速，infinite 是无限循环 */
+  animation: maxwell-spin 2s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+/* Thinking text breathing animation */
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.animate-shimmer {
+  color: #9a9a9a;
+  animation: breathe 2.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 /* Override prose for light theme */

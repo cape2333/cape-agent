@@ -10,7 +10,7 @@ const Sidebar: React.FC = () => {
   const toggleSidebar = useStore((s) => s.toggleSidebar);
 
   return (
-    <div className="bg-white flex flex-col h-full border-r border-warm-200">
+    <div className="flex flex-col h-full">
       {/* Drag region for macOS title bar */}
       <div
         className="h-12 flex-shrink-0 flex items-center justify-end gap-1 px-3"

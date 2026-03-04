@@ -1,6 +1,6 @@
 import type { Conversation, Message, AppSettings, ChatRequest, SSEEvent } from "../types";
 
-let BASE_URL = "http://127.0.0.1:8001";
+let BASE_URL = "http://127.0.0.1:8001"; // overridden by initApiUrl()
 
 export async function initApiUrl() {
   try {

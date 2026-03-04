@@ -1,18 +1,31 @@
 import { spawn, ChildProcess } from "child_process";
 import path from "path";
+import fs from "fs";
 import http from "http";
 
 let pythonProcess: ChildProcess | null = null;
-const BACKEND_PORT = 8001;
-const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
+
+function getProjectRoot(): string {
+  return path.join(__dirname, "..", "..", "..", "..");
+}
 
 function getBackendDir(): string {
-  // In development, backend is a sibling directory
-  return path.join(__dirname, "..", "..", "..", "..", "backend");
+  return path.join(getProjectRoot(), "backend");
+}
+
+function readPortFile(): number {
+  try {
+    const portFile = path.join(getProjectRoot(), ".backend_port");
+    const port = parseInt(fs.readFileSync(portFile, "utf-8").trim(), 10);
+    if (port > 0) return port;
+  } catch {
+    // fallback
+  }
+  return 8001;
 }
 
 export function getBackendUrl(): string {
-  return BACKEND_URL;
+  return `http://127.0.0.1:${readPortFile()}`;
 }
 
 export async function startPython(): Promise<void> {
@@ -57,7 +70,7 @@ async function waitForHealth(maxRetries = 30, interval = 1000): Promise<void> {
 
 function checkHealth(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const req = http.get(`${BACKEND_URL}/health`, (res) => {
+    const req = http.get(`${getBackendUrl()}/health`, (res) => {
       if (res.statusCode === 200) resolve();
       else reject(new Error(`Health check returned ${res.statusCode}`));
     });

@@ -34,9 +34,8 @@ const InputBar: React.FC = () => {
   const canSend = input.trim() && !isStreaming && activeConversationId;
 
   return (
-    <div className="p-4 pb-5">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-sm border border-warm-200 overflow-hidden">
+    <div className="px-4 pb-5">
+      <div className="bg-white rounded-2xl shadow-sm border border-warm-200 overflow-hidden">
           {/* Textarea area */}
           <textarea
             ref={textareaRef}
@@ -67,7 +66,6 @@ const InputBar: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
     </div>
   );
 };
