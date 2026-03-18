@@ -1,11 +1,12 @@
 import { create } from "zustand";
-import type { Conversation, Message, AppSettings } from "../types";
+import type { Conversation, Message, AppSettings, AgentStep } from "../types";
 
 interface AppState {
   // Conversations
   conversations: Conversation[];
   activeConversationId: string | null;
   setConversations: (conversations: Conversation[]) => void;
+  upsertConversation: (conversation: Conversation) => void;
   setActiveConversation: (id: string | null) => void;
   switchConversation: (id: string, messages: Message[]) => void;
   addConversation: (conv: Conversation) => void;
@@ -31,17 +32,44 @@ interface AppState {
   setSettings: (settings: AppSettings) => void;
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
+
+  // Browser panel
+  browserPanelVisible: boolean;
+  browserCurrentUrl: string;
+  cdpTargetUrl: string | null;
+  browserPanelRatio: number;
+  setBrowserPanelVisible: (visible: boolean) => void;
+  setBrowserCurrentUrl: (url: string) => void;
+  setCdpTargetUrl: (url: string | null) => void;
+  setBrowserPanelRatio: (ratio: number) => void;
+
+  // Agent steps (per-conversation)
+  agentSteps: Record<string, AgentStep[]>;
+  addAgentStep: (conversationId: string, step: AgentStep) => void;
+  updateAgentStep: (conversationId: string, stepId: string, update: Partial<AgentStep>) => void;
+  clearAgentSteps: (conversationId: string) => void;
+}
+
+function sortConversations(conversations: Conversation[]): Conversation[] {
+  return [...conversations].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
 export const useStore = create<AppState>((set) => ({
   // Conversations
   conversations: [],
   activeConversationId: null,
-  setConversations: (conversations) => set({ conversations }),
+  setConversations: (conversations) => set({ conversations: sortConversations(conversations) }),
+  upsertConversation: (conversation) =>
+    set((s) => {
+      const withoutCurrent = s.conversations.filter((c) => c.id !== conversation.id);
+      return {
+        conversations: sortConversations([conversation, ...withoutCurrent]),
+      };
+    }),
   setActiveConversation: (id) => set({ activeConversationId: id, messages: [] }),
   switchConversation: (id, messages) => set({ activeConversationId: id, messages }),
   addConversation: (conv) =>
-    set((s) => ({ conversations: [conv, ...s.conversations] })),
+    set((s) => ({ conversations: sortConversations([conv, ...s.conversations]) })),
   removeConversation: (id) =>
     set((s) => ({
       conversations: s.conversations.filter((c) => c.id !== id),
@@ -109,4 +137,43 @@ export const useStore = create<AppState>((set) => ({
   setSettings: (settings) => set({ settings }),
   showSettings: false,
   setShowSettings: (show) => set({ showSettings: show }),
+
+  // Browser panel
+  browserPanelVisible: false,
+  browserCurrentUrl: "",
+  cdpTargetUrl: null,
+  browserPanelRatio: 0.5,
+  setBrowserPanelVisible: (visible) => set({ browserPanelVisible: visible }),
+  setBrowserCurrentUrl: (url) => set({ browserCurrentUrl: url }),
+  setCdpTargetUrl: (url) => set({ cdpTargetUrl: url }),
+  setBrowserPanelRatio: (ratio) => set({ browserPanelRatio: ratio }),
+
+  // Agent steps
+  agentSteps: {},
+  addAgentStep: (conversationId, step) =>
+    set((s) => ({
+      agentSteps: {
+        ...s.agentSteps,
+        [conversationId]: [...(s.agentSteps[conversationId] || []), step],
+      },
+    })),
+  updateAgentStep: (conversationId, stepId, update) =>
+    set((s) => {
+      const steps = s.agentSteps[conversationId] || [];
+      return {
+        agentSteps: {
+          ...s.agentSteps,
+          [conversationId]: steps.map((step) =>
+            step.id === stepId ? { ...step, ...update } : step
+          ),
+        },
+      };
+    }),
+  clearAgentSteps: (conversationId) =>
+    set((s) => ({
+      agentSteps: {
+        ...s.agentSteps,
+        [conversationId]: [],
+      },
+    })),
 }));

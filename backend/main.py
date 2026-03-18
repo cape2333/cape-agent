@@ -1,4 +1,5 @@
 import socket
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from app.models.database import init_db
 from app.api.conversations import router as conversations_router
 from app.api.chat import router as chat_router
 from app.api.settings import router as settings_router
+from app.api.browser import router as browser_router
 
 
 @asynccontextmanager
@@ -31,6 +33,7 @@ app.add_middleware(
 app.include_router(conversations_router)
 app.include_router(chat_router)
 app.include_router(settings_router)
+app.include_router(browser_router)
 
 
 @app.get("/health")
@@ -54,9 +57,21 @@ def find_free_port(preferred: int = 8001) -> int:
         return port
 
 
+def get_port_file() -> Path:
+    port_file = os.environ.get("CAPE_AGENT_PORT_FILE")
+    if port_file:
+        return Path(port_file)
+    return Path(__file__).resolve().parent.parent / ".backend_port"
+
+
 if __name__ == "__main__":
     port = find_free_port(8001)
-    port_file = Path(__file__).resolve().parent.parent / ".backend_port"
+    port_file = get_port_file()
+    port_file.parent.mkdir(parents=True, exist_ok=True)
     port_file.write_text(str(port))
     print(f"Backend starting on port {port}")
-    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)
+    reload_enabled = os.environ.get("CAPE_AGENT_RELOAD") == "1"
+    if reload_enabled:
+        uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)
+    else:
+        uvicorn.run(app, host="127.0.0.1", port=port, reload=False)

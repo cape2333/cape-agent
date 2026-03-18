@@ -8,7 +8,7 @@ import { Plus } from "lucide-react";
 import appIcon from "../../../resources/icon.png";
 
 const ChatArea: React.FC = () => {
-  const { messages, isStreaming, streamingContent } = useChat();
+  const { messages, isStreaming, streamingContent, agentSteps } = useChat();
   const { createNew } = useConversations();
   const activeConversationId = useStore((s) => s.activeConversationId);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -26,7 +26,7 @@ const ChatArea: React.FC = () => {
     } else {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, streamingContent]);
+  }, [messages, streamingContent, agentSteps]);
 
   if (!activeConversationId) {
     return (
@@ -53,7 +53,12 @@ const ChatArea: React.FC = () => {
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
-        {isStreaming && <StreamingMessage content={streamingContent} />}
+        {isStreaming && (
+          <StreamingMessage
+            content={streamingContent}
+            agentSteps={agentSteps}
+          />
+        )}
         <div ref={bottomRef} />
       </div>
     </div>

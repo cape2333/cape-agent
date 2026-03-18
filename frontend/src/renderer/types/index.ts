@@ -35,15 +35,52 @@ export interface ChatRequest {
   api_base?: string;
 }
 
+// Agent step represents one tool call cycle
+export interface AgentStep {
+  id: string;
+  toolName: string;
+  toolArgs: Record<string, unknown>;
+  result?: string;
+  status: "running" | "done" | "error";
+  timestamp: string;
+}
+
 export interface SSEEvent {
-  type: "delta" | "done" | "error";
+  type: "delta" | "done" | "error" | "tool_start" | "tool_result";
   content: string;
+  conversation?: Conversation;
+  // For tool_start
+  tool_name?: string;
+  tool_args?: Record<string, unknown>;
+  // For tool_result
+  tool_result?: string;
+  step_id?: string;
+}
+
+export interface BrowserPanelInfo {
+  visible: boolean;
+  currentUrl: string;
+  cdpPort: number;
+}
+
+export interface BrowserPanelCreateResult {
+  success: boolean;
+  cdpTargetUrl?: string;
 }
 
 declare global {
   interface Window {
     electronAPI: {
       getBackendUrl: () => Promise<string>;
+      browserPanel: {
+        create: () => Promise<BrowserPanelCreateResult>;
+        show: (sidebarWidth?: number, browserPanelRatio?: number) => Promise<{ success: boolean }>;
+        hide: () => Promise<{ success: boolean }>;
+        navigate: (url: string) => Promise<{ success: boolean }>;
+        resize: (sidebarWidth?: number, browserPanelRatio?: number) => Promise<{ success: boolean }>;
+        getInfo: () => Promise<BrowserPanelInfo>;
+        destroy: () => Promise<{ success: boolean }>;
+      };
     };
   }
 }

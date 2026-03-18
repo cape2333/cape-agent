@@ -27,6 +27,28 @@ async def create_conversation(db: aiosqlite.Connection, title: str = "New Chat")
     return ConversationResponse(id=cid, title=title, created_at=ts, updated_at=ts)
 
 
+async def get_conversation(
+    db: aiosqlite.Connection,
+    conversation_id: str,
+) -> ConversationResponse | None:
+    cursor = await db.execute(
+        "SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?",
+        (conversation_id,),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return None
+    return ConversationResponse(id=row[0], title=row[1], created_at=row[2], updated_at=row[3])
+
+
+async def conversation_exists(db: aiosqlite.Connection, conversation_id: str) -> bool:
+    cursor = await db.execute(
+        "SELECT 1 FROM conversations WHERE id = ? LIMIT 1",
+        (conversation_id,),
+    )
+    return await cursor.fetchone() is not None
+
+
 async def delete_conversation(db: aiosqlite.Connection, conversation_id: str) -> bool:
     await db.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
     cursor = await db.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))

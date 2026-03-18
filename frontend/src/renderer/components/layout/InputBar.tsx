@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Globe } from "lucide-react";
 import { useChat } from "../../hooks/useChat";
 import { useStore } from "../../stores/store";
 
@@ -7,6 +7,8 @@ const InputBar: React.FC = () => {
   const [input, setInput] = useState("");
   const { sendMessage, isStreaming } = useChat();
   const activeConversationId = useStore((s) => s.activeConversationId);
+  const browserPanelVisible = useStore((s) => s.browserPanelVisible);
+  const setBrowserPanelVisible = useStore((s) => s.setBrowserPanelVisible);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize textarea
@@ -28,6 +30,20 @@ const InputBar: React.FC = () => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
+    }
+  };
+
+  const toggleBrowser = async () => {
+    if (browserPanelVisible) {
+      try {
+        await window.electronAPI.browserPanel.hide();
+      } catch { /* ignore */ }
+      setBrowserPanelVisible(false);
+    } else {
+      try {
+        await window.electronAPI.browserPanel.show();
+      } catch { /* ignore */ }
+      setBrowserPanelVisible(true);
     }
   };
 
@@ -55,7 +71,17 @@ const InputBar: React.FC = () => {
           {/* Bottom row: tools area + send button */}
           <div className="flex items-center justify-between px-3 pb-3">
             <div className="flex items-center gap-2">
-              {/* Future tools area */}
+              <button
+                onClick={toggleBrowser}
+                className={`p-2 rounded-xl transition-colors ${
+                  browserPanelVisible
+                    ? "bg-accent-500 text-white"
+                    : "text-warm-400 hover:text-warm-600 hover:bg-warm-200 disabled:opacity-50"
+                }`}
+                title={browserPanelVisible ? "Hide browser" : "Open browser"}
+              >
+                <Globe size={16} />
+              </button>
             </div>
             <button
               onClick={handleSubmit}
