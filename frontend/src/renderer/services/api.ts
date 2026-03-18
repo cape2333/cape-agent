@@ -97,21 +97,9 @@ export async function getBrowserStatus(): Promise<{ connected: boolean; cdp_url?
 
 // --- Streaming Chat ---
 
-export interface ChatEventHandlers {
-  onDelta: (content: string) => void;
-  onDone: (fullContent: string, conversation?: Conversation) => void;
-  onError: (error: string, conversation?: Conversation) => void;
-  onToolStart?: (stepId: string, toolName: string, toolArgs: Record<string, unknown>) => void;
-  onToolResult?: (stepId: string, toolName: string, toolResult: string) => void;
-}
-
 export async function sendChatMessage(
   req: ChatRequest,
-  onDelta: (content: string) => void,
-  onDone: (fullContent: string, conversation?: Conversation) => void,
-  onError: (error: string, conversation?: Conversation) => void,
-  onToolStart?: (stepId: string, toolName: string, toolArgs: Record<string, unknown>) => void,
-  onToolResult?: (stepId: string, toolName: string, toolResult: string) => void,
+  onEvent: (event: SSEEvent) => void,
 ): Promise<void> {
   await ensureApiUrl();
   const res = await fetch(`${BASE_URL}/api/chat`, {
@@ -121,13 +109,13 @@ export async function sendChatMessage(
   });
 
   if (!res.ok) {
-    onError(`HTTP ${res.status}: ${res.statusText}`);
+    onEvent({ step: "error", data: { message: `HTTP ${res.status}: ${res.statusText}` } });
     return;
   }
 
   const reader = res.body?.getReader();
   if (!reader) {
-    onError("No response body");
+    onEvent({ step: "error", data: { message: "No response body" } });
     return;
   }
 
@@ -147,25 +135,7 @@ export async function sendChatMessage(
       if (!trimmed.startsWith("data: ")) continue;
       try {
         const event: SSEEvent = JSON.parse(trimmed.slice(6));
-        if (event.type === "delta") {
-          onDelta(event.content);
-        } else if (event.type === "done") {
-          onDone(event.content, event.conversation);
-        } else if (event.type === "error") {
-          onError(event.content, event.conversation);
-        } else if (event.type === "tool_start" && onToolStart) {
-          onToolStart(
-            event.step_id || "",
-            event.tool_name || "",
-            event.tool_args || {},
-          );
-        } else if (event.type === "tool_result" && onToolResult) {
-          onToolResult(
-            event.step_id || "",
-            event.tool_name || "",
-            event.tool_result || "",
-          );
-        }
+        onEvent(event);
       } catch {
         // skip malformed SSE
       }
