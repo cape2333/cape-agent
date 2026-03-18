@@ -110,10 +110,13 @@ async def agent_chat(
     full_content = ""
 
     if hasattr(response, "__aiter__"):
+        prev_content = ""
         async for partial in response:
-            delta = partial.msg.content if partial.msg else ""
-            if delta:
-                full_content += delta
+            accumulated = partial.msg.content if partial.msg else ""
+            if accumulated and len(accumulated) > len(prev_content):
+                delta = accumulated[len(prev_content):]
+                prev_content = accumulated
+                full_content = accumulated
                 yield {"type": "delta", "content": delta}
     else:
         if response.msgs:
