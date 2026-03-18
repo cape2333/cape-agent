@@ -35,6 +35,29 @@ export interface ChatRequest {
   api_base?: string;
 }
 
+// Multi-agent task tracking
+export interface SubTask {
+  id: string;
+  content: string;
+  state: 'open' | 'waiting' | 'running' | 'done' | 'failed';
+  assigneeId?: string;
+  result?: string;
+}
+
+export interface AgentActivity {
+  agentId: string;
+  agentName: string;
+  processTaskId: string;
+  message: string;
+}
+
+export interface TaskStateInfo {
+  status: 'idle' | 'classifying' | 'decomposing' | 'executing' | 'done';
+  subTasks: SubTask[];
+  activeAgents: AgentActivity[];
+  streamingDecomposeText: string;
+}
+
 // Agent step represents one tool call cycle
 export interface AgentStep {
   id: string;
@@ -46,15 +69,8 @@ export interface AgentStep {
 }
 
 export interface SSEEvent {
-  type: "delta" | "done" | "error" | "tool_start" | "tool_result";
-  content: string;
-  conversation?: Conversation;
-  // For tool_start
-  tool_name?: string;
-  tool_args?: Record<string, unknown>;
-  // For tool_result
-  tool_result?: string;
-  step_id?: string;
+  step: string;
+  data: Record<string, unknown>;
 }
 
 export interface BrowserPanelInfo {
