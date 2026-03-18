@@ -43,4 +43,5 @@ def create_developer_agent(
         ),
         tools=tools,
         model=model,
+        prune_tool_calls_from_memory=True,
     )
