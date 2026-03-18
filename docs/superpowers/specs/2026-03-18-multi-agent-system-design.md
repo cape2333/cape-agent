@@ -12,7 +12,7 @@ Refactor cape-agent from a single-agent architecture to a multi-agent system usi
 - 3 specialized agents: browser_agent, developer_agent, document_agent
 - SSE streaming of all multi-agent lifecycle events
 - Frontend display of task decomposition, agent activity, and progress
-- Toolkits ported from Eigent: TerminalToolkit, FileToolkit, NoteTakingToolkit
+- Toolkits from CAMEL built-in: TerminalToolkit, FileToolkit, NoteTakingToolkit
 
 **Out of scope (future iterations):**
 - Task editing before execution (user confirmation flow)
@@ -98,10 +98,6 @@ backend/app/
 |       +-- developer.py     # NEW: Developer agent factory
 |       +-- document.py      # NEW: Document agent factory
 |       +-- classifier.py    # NEW: Question classifier agent
-+-- toolkits/
-    +-- terminal.py          # NEW: Terminal toolkit (ported from Eigent)
-    +-- file.py              # NEW: File toolkit (ported from Eigent)
-    +-- note_taking.py       # NEW: Note-taking toolkit for cross-agent sharing
 ```
 
 ## SSE Event Protocol
@@ -169,7 +165,7 @@ class TaskLock:
     status: Status                   # classifying | decomposing | executing | done
     queue: asyncio.Queue[dict]       # {"step": str, "data": dict} events
     workforce: Workforce | None = None  # Active workforce (complex path only)
-    notes: dict[str, str] = field(default_factory=dict)  # Shared notes for cross-agent communication
+    working_directory: str = ""  # Shared working dir for toolkits (notes, files)
     background_tasks: set[asyncio.Task] = field(default_factory=set)  # Track bg tasks for cleanup
 
     async def put_event(self, step: str, data: dict):
@@ -611,9 +607,20 @@ System prompt: Senior Research Analyst role. Web search and browsing specialist.
 
 #### Developer Agent Factory
 ```python
-def create_developer_agent(task_lock: TaskLock, model: BaseModelBackend) -> ListenChatAgent:
-    terminal_toolkit = TerminalToolkit(task_lock=task_lock)
-    note_toolkit = NoteTakingToolkit(task_lock=task_lock)
+from camel.toolkits.terminal_toolkit import TerminalToolkit
+from camel.toolkits import NoteTakingToolkit
+
+def create_developer_agent(task_lock: TaskLock, model: BaseModelBackend,
+                           working_directory: str) -> ListenChatAgent:
+    terminal_toolkit = TerminalToolkit(
+        working_directory=working_directory,
+        safe_mode=True,
+        clone_current_env=True,
+        timeout=30.0,
+    )
+    note_toolkit = NoteTakingToolkit(
+        working_directory=working_directory,
+    )
     tools = terminal_toolkit.get_tools() + note_toolkit.get_tools()
     return ListenChatAgent(
         task_lock=task_lock,
@@ -627,13 +634,22 @@ def create_developer_agent(task_lock: TaskLock, model: BaseModelBackend) -> List
     )
 ```
 
-System prompt: Lead Software Engineer role. Code execution and technical implementation. Uses TerminalToolkit (shell_exec, file operations) + NoteTakingToolkit for sharing results.
+System prompt: Lead Software Engineer role. Code execution and technical implementation. Uses CAMEL's `TerminalToolkit` (shell_exec, shell_view, process management) + `NoteTakingToolkit` for sharing results.
 
 #### Document Agent Factory
 ```python
-def create_document_agent(task_lock: TaskLock, model: BaseModelBackend) -> ListenChatAgent:
-    file_toolkit = FileToolkit(task_lock=task_lock)
-    note_toolkit = NoteTakingToolkit(task_lock=task_lock)
+from camel.toolkits import FileToolkit, NoteTakingToolkit
+
+def create_document_agent(task_lock: TaskLock, model: BaseModelBackend,
+                          working_directory: str) -> ListenChatAgent:
+    file_toolkit = FileToolkit(
+        working_directory=working_directory,
+        default_encoding="utf-8",
+        backup_enabled=True,
+    )
+    note_toolkit = NoteTakingToolkit(
+        working_directory=working_directory,
+    )
     tools = file_toolkit.get_tools() + note_toolkit.get_tools()
     return ListenChatAgent(
         task_lock=task_lock,
@@ -647,7 +663,7 @@ def create_document_agent(task_lock: TaskLock, model: BaseModelBackend) -> Liste
     )
 ```
 
-System prompt: Documentation Specialist role. Document creation and management. Uses FileToolkit (write_to_file for Markdown, HTML, CSV, JSON) + NoteTakingToolkit for cross-agent info sharing.
+System prompt: Documentation Specialist role. Document creation and management. Uses CAMEL's `FileToolkit` (write_to_file, read_file, edit_file, search_files — supports Markdown, HTML, CSV, JSON, YAML, PDF, Word) + `NoteTakingToolkit` for cross-agent info sharing.
 
 #### Question Classifier Agent
 ```python
@@ -665,34 +681,32 @@ def create_classifier_agent(model: BaseModelBackend) -> ChatAgent:
 
 System prompt: Analyzes user request complexity. Returns "simple" for direct Q&A, greetings, factual questions. Returns "complex" for multi-step tasks requiring tools, research, code, or document creation.
 
-### Toolkits (Ported from Eigent)
+### Toolkits (CAMEL Built-in)
 
-Toolkits are simplified ports from Eigent. Eigent's `@auto_listen_toolkit` decorator and `AbstractToolkit` base class are **not ported**. Instead, toolkit events are handled entirely through `ListenChatAgent._aexecute_tool()` overrides. Toolkits are plain CAMEL `BaseToolkit` subclasses.
+All toolkits are CAMEL's built-in implementations — no custom toolkit code needed. Toolkit events (activate/deactivate) are handled entirely through `ListenChatAgent._aexecute_tool()` overrides.
 
-#### TerminalToolkit
-- Extends CAMEL's `BaseToolkit`
-- `shell_exec(command: str) -> str` - Execute shell commands
-- Safe mode: basic command sanitization (no rm -rf /, etc.)
-- No venv management in MVP (simplified from Eigent)
-- Working directory defaults to a per-conversation temp directory
-- Uses `subprocess.run` with timeout and output capture
+#### TerminalToolkit (`camel.toolkits.terminal_toolkit.TerminalToolkit`)
+- `shell_exec(id, command, block=True)` - Execute shell commands (blocking/non-blocking)
+- `shell_view(id)` - View output from non-blocking session
+- `shell_write_to_process(id, command)` - Send input to running process
+- `shell_kill_process(id)` - Terminate a running process
+- Config: `safe_mode=True`, `clone_current_env=True`, `working_directory` per conversation
 
-#### FileToolkit
-- Extends CAMEL's `BaseToolkit`
-- `write_to_file(path: str, content: str) -> str` - Create/write documents
-- UTF-8 encoding support
-- Supports Markdown, HTML, CSV, JSON, YAML formats
-- File output directory scoped to per-conversation working directory
-- Emits `write_file` events via `task_lock.put_event()` after writing
+#### FileToolkit (`camel.toolkits.FileToolkit`)
+- `write_to_file(filename, content, title, encoding, use_latex)` - Write Markdown, HTML, CSV, JSON, YAML, PDF, Word
+- `read_file(file_paths)` - Read files with MarkItDown format conversion (supports PDF, Word, Excel, images via OCR, audio)
+- `edit_file(file_path, old_content, new_content)` - Replace text in files
+- `search_files(pattern, file_types, path)` - Search for patterns across files
+- Config: `default_encoding="utf-8"`, `backup_enabled=True`, `working_directory` per conversation
 
-#### NoteTakingToolkit
-- Extends CAMEL's `BaseToolkit`
-- `create_note(title: str, content: str)` - Create a note for other agents
-- `read_note(title: str) -> str` - Read a note from any agent
-- `list_note() -> list[str]` - List all available notes
-- `append_note(title: str, content: str)` - Append to existing note
-- Shared `shared_files` note for tracking generated files
-- Storage: `task_lock.notes: dict[str, str]` -- in-memory dict on the TaskLock, scoped to the session lifetime. All agents sharing the same TaskLock share the same notes dict.
+#### NoteTakingToolkit (`camel.toolkits.NoteTakingToolkit`)
+- `create_note(note_name, content, overwrite=False)` - Create markdown note
+- `append_note(note_name, content)` - Append to existing note
+- `read_note(note_name="all_notes")` - Read single or all notes
+- `list_note()` - List all notes with file sizes
+- Storage: Markdown files in `working_directory` with `.note_register` index
+- Thread-safe with retry logic for concurrent access
+- All agents in the same workforce share the same `working_directory`, so notes are automatically shared
 
 ## Chat Endpoint Flow (Refactored)
 
@@ -818,6 +832,12 @@ def sse_json(step: str, data) -> str:
 
 ```python
 def build_workforce(task_lock: TaskLock, model: BaseModelBackend) -> CapeWorkforce:
+    # Create a shared working directory for this session
+    # All toolkits (terminal, file, notes) share this directory
+    import tempfile
+    working_dir = tempfile.mkdtemp(prefix=f"cape_{task_lock.id[:8]}_")
+    task_lock.working_directory = working_dir
+
     # Create workforce (coordinator + task agents are created internally by CAMEL)
     workforce = CapeWorkforce(
         task_lock=task_lock,
@@ -833,13 +853,13 @@ def build_workforce(task_lock: TaskLock, model: BaseModelBackend) -> CapeWorkfor
             worker=browser_agent,
         )
 
-    developer_agent = create_developer_agent(task_lock, model)
+    developer_agent = create_developer_agent(task_lock, model, working_dir)
     workforce.add_single_agent_worker(
         description="Code writing, execution, and technical implementation",
         worker=developer_agent,
     )
 
-    document_agent = create_document_agent(task_lock, model)
+    document_agent = create_document_agent(task_lock, model, working_dir)
     workforce.add_single_agent_worker(
         description="Document creation, file management, and content writing",
         worker=document_agent,
@@ -976,8 +996,4 @@ The old SSE format `{"type": "delta", "content": "..."}` is replaced with `{"ste
 | `backend/app/agents/factory/developer.py` | Developer agent factory |
 | `backend/app/agents/factory/document.py` | Document agent factory |
 | `backend/app/agents/factory/classifier.py` | Question classifier factory |
-| `backend/app/toolkits/__init__.py` | Package init |
-| `backend/app/toolkits/terminal.py` | TerminalToolkit (simplified from Eigent) |
-| `backend/app/toolkits/file.py` | FileToolkit (simplified from Eigent) |
-| `backend/app/toolkits/note_taking.py` | NoteTakingToolkit for cross-agent sharing |
 | `frontend/src/renderer/components/chat/TaskProgress.tsx` | Subtask progress display |
