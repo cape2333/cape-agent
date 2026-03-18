@@ -11,7 +11,7 @@ rm -f "$PORT_FILE"
 # Start backend in background
 echo "Starting backend..."
 cd "$PROJECT_DIR/backend"
-python3 main.py &
+CAPE_AGENT_RELOAD=1 python3 main.py &
 BACKEND_PID=$!
 
 # Cleanup on exit

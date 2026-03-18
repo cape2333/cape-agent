@@ -1,3 +1,4 @@
+import { app } from "electron";
 import { spawn, ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
@@ -6,16 +7,61 @@ import http from "http";
 let pythonProcess: ChildProcess | null = null;
 
 function getProjectRoot(): string {
-  return path.join(__dirname, "..", "..", "..", "..");
+  // __dirname = frontend/.vite/build/ → 3 levels up → cape-agent/
+  return path.join(__dirname, "..", "..", "..");
 }
 
 function getBackendDir(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "backend");
+  }
   return path.join(getProjectRoot(), "backend");
+}
+
+function getPythonCommand(): string {
+  const envOverride = process.env.CAPE_AGENT_PYTHON_BIN;
+  if (envOverride) {
+    return envOverride;
+  }
+
+  if (app.isPackaged) {
+    const candidates =
+      process.platform === "win32"
+        ? [
+            path.join(process.resourcesPath, "python", "python.exe"),
+            path.join(process.resourcesPath, "python", "Scripts", "python.exe"),
+          ]
+        : [
+            path.join(process.resourcesPath, "python", "bin", "python3"),
+            path.join(process.resourcesPath, "python", "bin", "python"),
+          ];
+
+    const bundledPython = candidates.find((candidate) => fs.existsSync(candidate));
+    if (bundledPython) {
+      return bundledPython;
+    }
+  }
+
+  return "python3";
+}
+
+function getPortFilePath(): string {
+  if (app.isPackaged) {
+    return path.join(app.getPath("userData"), ".backend_port");
+  }
+  return path.join(getProjectRoot(), ".backend_port");
+}
+
+function getDatabasePath(): string {
+  if (app.isPackaged) {
+    return path.join(app.getPath("userData"), "cape_agent.db");
+  }
+  return path.join(getProjectRoot(), "backend", "cape_agent.db");
 }
 
 function readPortFile(): number {
   try {
-    const portFile = path.join(getProjectRoot(), ".backend_port");
+    const portFile = getPortFilePath();
     const port = parseInt(fs.readFileSync(portFile, "utf-8").trim(), 10);
     if (port > 0) return port;
   } catch {
@@ -30,12 +76,23 @@ export function getBackendUrl(): string {
 
 export async function startPython(): Promise<void> {
   const backendDir = getBackendDir();
+  const portFilePath = getPortFilePath();
+  const pythonCommand = getPythonCommand();
   console.log(`Starting Python backend from: ${backendDir}`);
+  console.log(`Using Python runtime: ${pythonCommand}`);
 
-  pythonProcess = spawn("python3", ["main.py"], {
+  fs.mkdirSync(path.dirname(portFilePath), { recursive: true });
+  fs.rmSync(portFilePath, { force: true });
+
+  pythonProcess = spawn(pythonCommand, ["main.py"], {
     cwd: backendDir,
     stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env },
+    env: {
+      ...process.env,
+      CAPE_AGENT_DB_PATH: getDatabasePath(),
+      CAPE_AGENT_PORT_FILE: portFilePath,
+      CAPE_AGENT_RELOAD: "0",
+    },
   });
 
   pythonProcess.stdout?.on("data", (data: Buffer) => {

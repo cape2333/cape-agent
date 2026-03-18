@@ -5,6 +5,6 @@
   "scripts": {
     "dev": "bash scripts/dev.sh",
     "dev:frontend": "cd frontend && npm run start",
-    "dev:backend": "cd backend && python3 main.py"
+    "dev:backend": "cd backend && CAPE_AGENT_RELOAD=1 python3 main.py"
   }
 }

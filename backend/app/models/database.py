@@ -1,18 +1,32 @@
 import aiosqlite
 import os
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "cape_agent.db")
+DEFAULT_DB_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "cape_agent.db",
+)
+
+
+def get_db_path() -> str:
+    return os.environ.get("CAPE_AGENT_DB_PATH", DEFAULT_DB_PATH)
+
 
 async def get_db():
-    db = await aiosqlite.connect(DB_PATH)
+    db = await aiosqlite.connect(get_db_path())
     db.row_factory = aiosqlite.Row
+    await db.execute("PRAGMA foreign_keys = ON")
     try:
         yield db
     finally:
         await db.close()
 
+
 async def init_db():
-    async with aiosqlite.connect(DB_PATH) as db:
+    db_path = get_db_path()
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("PRAGMA foreign_keys = ON")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY,
