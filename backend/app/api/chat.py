@@ -87,7 +87,7 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
 
             else:
                 # Complex path: workforce
-                workforce = build_workforce(
+                workforce = await build_workforce(
                     task_lock=task_lock,
                     provider=provider,
                     model_name=model_name,

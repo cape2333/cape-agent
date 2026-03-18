@@ -1,6 +1,7 @@
 # backend/app/services/agent_service.py
 import json
 import logging
+import os
 import tempfile
 from typing import AsyncGenerator, List, Optional
 
@@ -30,6 +31,16 @@ PLATFORM_MAP = {
     "mistral": ModelPlatformType.MISTRAL,
     "ollama": ModelPlatformType.OLLAMA,
     "minimax": ModelPlatformType.MINIMAX,
+}
+
+# Maps provider name to the env var CAMEL expects for API keys
+PROVIDER_ENV_KEY = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "gemini": "GOOGLE_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
 }
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant."
@@ -126,7 +137,7 @@ async def agent_chat(
     yield {"type": "done", "content": full_content}
 
 
-def build_workforce(
+async def build_workforce(
     task_lock: TaskLock,
     provider: str,
     model_name: str,
@@ -134,6 +145,12 @@ def build_workforce(
     api_base: Optional[str] = None,
 ) -> CapeWorkforce:
     """Build a CapeWorkforce with browser, developer, and document agents."""
+    # Set API key as env var so CAMEL's internal recovery strategy can use it
+    if api_key:
+        env_key = PROVIDER_ENV_KEY.get(provider)
+        if env_key:
+            os.environ[env_key] = api_key
+
     model = build_model(provider, model_name, api_key, api_base)
 
     working_dir = tempfile.mkdtemp(prefix=f"cape_{task_lock.id[:8]}_")
@@ -146,7 +163,13 @@ def build_workforce(
         model=model,
     )
     task_agent = ChatAgent(
-        system_message="You decompose complex tasks into smaller subtasks.",
+        system_message=(
+            "You decompose complex tasks into smaller subtasks. "
+            "Keep subtasks simple and practical. "
+            "NEVER ask agents to extract raw HTML or full page source code. "
+            "NEVER create overly detailed extraction schemas. "
+            "Focus on high-level goals: browse, summarize, write, code."
+        ),
         model=model,
     )
 
@@ -156,6 +179,14 @@ def build_workforce(
         coordinator_agent=coordinator,
         task_agent=task_agent,
     )
+
+    # Auto-connect browser if not already connected
+    if not browser_service.connected:
+        try:
+            await browser_service.connect("http://127.0.0.1:9222")
+            logger.info("Browser service auto-connected for workforce")
+        except Exception as e:
+            logger.warning(f"Browser auto-connect failed: {e}")
 
     if browser_service.connected:
         browser_agent = create_browser_agent(task_lock, model, working_dir)
