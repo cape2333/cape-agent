@@ -8,7 +8,7 @@ import { Plus } from "lucide-react";
 import appIcon from "../../../resources/icon.png";
 
 const ChatArea: React.FC = () => {
-  const { messages, isStreaming, streamingContent, agentSteps } = useChat();
+  const { messages, isStreaming, streamingContent, agentSteps, taskState } = useChat();
   const { createNew } = useConversations();
   const activeConversationId = useStore((s) => s.activeConversationId);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -57,6 +57,7 @@ const ChatArea: React.FC = () => {
           <StreamingMessage
             content={streamingContent}
             agentSteps={agentSteps}
+            taskState={taskState}
           />
         )}
         <div ref={bottomRef} />
