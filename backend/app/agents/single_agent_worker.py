@@ -2,7 +2,8 @@ import logging
 from typing import List
 
 from camel.societies.workforce import SingleAgentWorker
-from camel.tasks import Task, TaskState
+from camel.tasks import Task
+from camel.tasks.task import TaskState
 
 from app.agents.listen_chat_agent import ListenChatAgent
 
