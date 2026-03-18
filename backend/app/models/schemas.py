@@ -58,3 +58,11 @@ class ProviderSettings(BaseModel):
 class AppSettings(BaseModel):
     providers: List[ProviderSettings] = Field(default_factory=lambda: [ProviderSettings()])
     active_provider_index: int = 0
+
+
+import json
+
+
+def sse_json(step: str, data) -> str:
+    payload = {"step": step, "data": data}
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
