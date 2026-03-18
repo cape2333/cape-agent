@@ -15,12 +15,18 @@ your own knowledge.
 After finding information, use note-taking tools to record your findings \
 so other agents can access them.
 
+IMPORTANT RULES:
+- NEVER try to extract or return raw HTML. Only extract text content.
+- Keep your summaries concise. Focus on key points, not full page dumps.
+- When using browser_get_page_snapshot, the output can be very large. \
+Focus on extracting only the relevant parts you need.
+
 Workflow:
 1. Use browser_visit_page to navigate to relevant websites
 2. Use browser_get_page_snapshot to understand page content
 3. Interact with elements using browser_click, browser_type, browser_select
-4. Record findings with create_note or append_note
-5. Provide a comprehensive summary when done
+4. Record key findings with create_note or append_note (concise text only)
+5. Provide a comprehensive but concise summary when done
 """
 
 
@@ -40,4 +46,6 @@ def create_browser_agent(
         ),
         tools=tools,
         model=model,
+        enable_snapshot_clean=True,
+        prune_tool_calls_from_memory=True,
     )
