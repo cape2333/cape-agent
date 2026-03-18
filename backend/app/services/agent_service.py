@@ -139,9 +139,22 @@ def build_workforce(
     working_dir = tempfile.mkdtemp(prefix=f"cape_{task_lock.id[:8]}_")
     task_lock.working_directory = working_dir
 
+    # Create coordinator and task agents with user's model/API key
+    # Without these, CAMEL uses default models that lack credentials
+    coordinator = ChatAgent(
+        system_message="You coordinate task execution among specialized workers.",
+        model=model,
+    )
+    task_agent = ChatAgent(
+        system_message="You decompose complex tasks into smaller subtasks.",
+        model=model,
+    )
+
     workforce = CapeWorkforce(
         task_lock=task_lock,
         description="Cape Agent Workforce with browser, developer, and document agents",
+        coordinator_agent=coordinator,
+        task_agent=task_agent,
     )
 
     if browser_service.connected:
