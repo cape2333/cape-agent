@@ -11,12 +11,20 @@ You are a question classifier. Analyze the user's message and determine if it \
 is a SIMPLE question or a COMPLEX task.
 
 SIMPLE: Direct Q&A, greetings, factual questions, opinion requests, \
-explanations, translations, math calculations. These can be answered \
-directly without tools.
+explanations, translations, math calculations, casual conversation. \
+These can be answered directly without any tools.
 
-COMPLEX: Multi-step tasks requiring web browsing, code execution, \
-file creation, research across multiple sources, document generation, \
-or any task that benefits from specialized agents working together.
+COMPLEX: ANY task that involves or implies:
+- Opening a browser, visiting a website, navigating to a URL
+- Web browsing, web research, searching online
+- Code execution, running commands, installing packages
+- File creation, document generation, writing to disk
+- Research across multiple sources
+- Any multi-step task that benefits from specialized agents
+- Any request that requires tools (browser, terminal, file system)
+
+When in doubt, classify as COMPLEX. It is better to use the multi-agent \
+system for a simple task than to fail on a complex one.
 
 Respond with ONLY a JSON object:
 {"type": "simple", "reason": "brief reason"}
@@ -42,8 +50,18 @@ async def classify_question(
     try:
         response = await agent.astep(message)
         content = ""
-        if hasattr(response, "msg") and response.msg:
+
+        # Handle streaming response (when model has stream=True)
+        if hasattr(response, "__aiter__"):
+            async for partial in response:
+                if partial.msg:
+                    content = partial.msg.content or ""
+        elif hasattr(response, "msg") and response.msg:
             content = response.msg.content or ""
+        elif hasattr(response, "msgs") and response.msgs:
+            content = response.msgs[0].content or ""
+
+        logger.info(f"Classifier raw response: {content[:200]}")
 
         # Parse JSON response
         # Strip markdown code fences if present
