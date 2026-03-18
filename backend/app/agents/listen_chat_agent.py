@@ -116,5 +116,15 @@ class ListenChatAgent(ChatAgent):
             })
             raise
 
+    def clone(self, with_memory: bool = False):
+        """Clone preserving ListenChatAgent type and SSE event hooks."""
+        cloned = super().clone(with_memory=with_memory)
+        cloned.__class__ = ListenChatAgent
+        cloned.task_lock = self.task_lock
+        cloned.agent_name = self.agent_name
+        cloned.agent_id = self.agent_id
+        cloned.process_task_id = self.process_task_id
+        return cloned
+
     def _resolve_toolkit_name(self, tool_name: str) -> str:
         return tool_name.split("_")[0] if "_" in tool_name else tool_name
