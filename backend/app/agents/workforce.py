@@ -42,8 +42,8 @@ class CapeWorkforceCallback(WorkforceCallback):
     def log_task_decomposed(self, event: TaskDecomposedEvent) -> None:
         self._emit("decompose_progress", {
             "sub_tasks": [
-                {"id": t.id, "content": t.content, "state": "open"}
-                for t in event.subtasks
+                {"id": tid, "content": tid, "state": "open"}
+                for tid in event.subtask_ids
             ],
             "is_final": True,
         })
@@ -51,18 +51,16 @@ class CapeWorkforceCallback(WorkforceCallback):
     def log_task_assigned(self, event: TaskAssignedEvent) -> None:
         self._emit("assign_task", {
             "task_id": event.task_id,
-            "assignee_id": getattr(event, "worker_description", None)
-                or getattr(event, "assignee_id", "unknown"),
-            "content": getattr(event, "task_content", ""),
+            "assignee_id": event.worker_id,
+            "content": "",
             "state": "waiting",
         })
 
     def log_task_started(self, event: TaskStartedEvent) -> None:
         self._emit("assign_task", {
             "task_id": event.task_id,
-            "assignee_id": getattr(event, "worker_description", None)
-                or getattr(event, "assignee_id", "unknown"),
-            "content": getattr(event, "task_content", ""),
+            "assignee_id": event.worker_id,
+            "content": "",
             "state": "running",
         })
 
@@ -70,16 +68,16 @@ class CapeWorkforceCallback(WorkforceCallback):
         self._emit("task_state", {
             "task_id": event.task_id,
             "state": "done",
-            "result": getattr(event, "result", ""),
-            "content": getattr(event, "task_content", ""),
+            "result": event.result_summary or "",
+            "content": "",
         })
 
     def log_task_failed(self, event: TaskFailedEvent) -> None:
         self._emit("task_state", {
             "task_id": event.task_id,
             "state": "failed",
-            "result": str(getattr(event, "error", "")),
-            "content": getattr(event, "task_content", ""),
+            "result": event.error_message,
+            "content": "",
         })
 
     def log_worker_created(self, event: WorkerCreatedEvent) -> None:
@@ -89,11 +87,7 @@ class CapeWorkforceCallback(WorkforceCallback):
         pass
 
     def log_all_tasks_completed(self, event: AllTasksCompletedEvent) -> None:
-        results = []
-        for tr in getattr(event, "task_results", []):
-            results.append(f"- {tr.content}: {tr.result}")
-        summary = "\n".join(results) if results else "Task completed."
-        self._emit("end", {"content": summary})
+        self._emit("end", {"content": "All tasks completed."})
 
 
 class CapeWorkforce(Workforce):
