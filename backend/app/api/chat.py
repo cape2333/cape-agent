@@ -1,21 +1,27 @@
+# backend/app/api/chat.py
+import asyncio
 import json
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 import aiosqlite
 
-logger = logging.getLogger(__name__)
-
 from app.models.database import get_db
-from app.models.schemas import ChatRequest
+from app.models.enums import Status
+from app.models.schemas import ChatRequest, sse_json
 from app.services.conversation_service import (
     get_messages,
     add_message,
     conversation_exists,
     get_conversation,
 )
-from app.services.agent_service import build_agent, agent_chat
-from app.services.browser_service import browser_service
+from app.services.agent_service import build_agent, agent_chat, build_workforce
+from app.services.task_lock import TaskLock
+from app.agents.factory import create_classifier_agent, classify_question
+from app.services.agent_service import build_model
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
@@ -25,75 +31,121 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
     if not await conversation_exists(db, req.conversation_id):
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Save user message
     try:
         await add_message(db, req.conversation_id, "user", req.message)
     except aiosqlite.IntegrityError as exc:
         raise HTTPException(status_code=404, detail="Conversation not found") from exc
-    current_conversation = await get_conversation(db, req.conversation_id)
 
-    # Load conversation history (excluding the message we just added — it'll be the user prompt)
     messages = await get_messages(db, req.conversation_id)
     history = [{"role": m.role, "content": m.content} for m in messages[:-1]]
 
-    print(f"[CHAT] provider={req.provider}, model={req.model}, api_base={req.api_base!r}, api_key={'***' + req.api_key[-4:] if req.api_key and len(req.api_key) > 4 else '(empty)'}", flush=True)
+    provider = req.provider or "openai"
+    model_name = req.model or "gpt-4o-mini"
 
-    # Get browser tools if connected
-    tools = browser_service.get_tools() if browser_service.connected else []
-    if tools:
-        tool_names = [t.get_function_name() for t in tools]
-        print(f"[CHAT] Browser connected, {len(tools)} tools: {tool_names}", flush=True)
-    else:
-        print(f"[CHAT] No browser tools (connected={browser_service.connected})", flush=True)
-
-    try:
-        agent = build_agent(
-            provider=req.provider or "openai",
-            model_name=req.model or "gpt-4o-mini",
-            api_key=req.api_key,
-            api_base=req.api_base,
-            history=history,
-            tools=tools,
-        )
-    except Exception as e:
-        logger.error(f"Agent build error: {e}", exc_info=True)
-        error_msg = str(e)
-        if "API" in error_msg and "key" in error_msg.lower():
-            error_msg = "API key is missing. Please configure it in Settings."
-        async def error_stream():
-            yield f"data: {json.dumps({'type': 'error', 'content': error_msg, 'conversation': current_conversation.model_dump() if current_conversation else None})}\n\n"
-        return StreamingResponse(error_stream(), media_type="text/event-stream")
+    logger.info(f"[CHAT] provider={provider}, model={model_name}")
 
     async def event_stream():
-        full_content = ""
+        task_lock = TaskLock(
+            id=req.conversation_id,
+            status=Status.classifying,
+        )
+
         try:
-            async for event in agent_chat(agent, req.message):
-                event_type = event.get("type")
+            # Classify question
+            model = build_model(provider, model_name, req.api_key, req.api_base)
+            classifier = create_classifier_agent(model)
+            classification = await classify_question(
+                classifier, req.message, history
+            )
+            logger.info(f"[CHAT] classification={classification}")
 
-                if event_type == "delta":
-                    full_content += event["content"]
-                    yield f"data: {json.dumps({'type': 'delta', 'content': event['content']})}\n\n"
+            if classification == "simple":
+                # Simple path: direct streaming
+                agent = build_agent(
+                    provider=provider,
+                    model_name=model_name,
+                    api_key=req.api_key,
+                    api_base=req.api_base,
+                    history=history,
+                )
+                full_content = ""
+                async for event in agent_chat(agent, req.message):
+                    if event["type"] == "delta":
+                        yield sse_json("delta", {"content": event["content"]})
+                        full_content += event["content"]
+                    elif event["type"] == "done":
+                        full_content = event.get("content", full_content)
 
-                elif event_type == "tool_start":
-                    yield f"data: {json.dumps({'type': 'tool_start', 'step_id': event.get('step_id', ''), 'tool_name': event.get('tool_name', ''), 'tool_args': event.get('tool_args', {})})}\n\n"
+                await add_message(
+                    db, req.conversation_id, "assistant", full_content
+                )
+                conv = await get_conversation(db, req.conversation_id)
+                yield sse_json("done", {
+                    "content": full_content,
+                    "conversation": conv.model_dump() if conv else None,
+                })
 
-                elif event_type == "tool_result":
-                    yield f"data: {json.dumps({'type': 'tool_result', 'step_id': event.get('step_id', ''), 'tool_name': event.get('tool_name', ''), 'tool_result': event.get('tool_result', '')})}\n\n"
+            else:
+                # Complex path: workforce
+                workforce = build_workforce(
+                    task_lock=task_lock,
+                    provider=provider,
+                    model_name=model_name,
+                    api_key=req.api_key,
+                    api_base=req.api_base,
+                )
 
-                elif event_type == "done":
-                    full_content = event.get("content", full_content)
+                bg_task = asyncio.create_task(workforce.run(req.message))
+                task_lock.background_tasks.add(bg_task)
+
+                while True:
+                    if bg_task.done() and task_lock.queue.empty():
+                        exc = bg_task.exception()
+                        if exc:
+                            yield sse_json("error", {"message": str(exc)})
+                        break
+
+                    try:
+                        event = await asyncio.wait_for(
+                            task_lock.get_event(), timeout=300
+                        )
+                    except asyncio.TimeoutError:
+                        yield sse_json("error", {
+                            "message": "Workforce timed out"
+                        })
+                        break
+
+                    if event["step"] == "end":
+                        content = event["data"].get("content", "")
+                        await add_message(
+                            db, req.conversation_id, "assistant", content
+                        )
+                        conv = await get_conversation(db, req.conversation_id)
+                        yield sse_json("end", {
+                            "content": content,
+                            "conversation": conv.model_dump() if conv else None,
+                        })
+                        break
+                    elif event["step"] == "error":
+                        yield sse_json("error", event["data"])
+                        break
+                    else:
+                        yield sse_json(event["step"], event["data"])
+
+                if not bg_task.done():
+                    bg_task.cancel()
+                    try:
+                        await bg_task
+                    except asyncio.CancelledError:
+                        pass
 
         except Exception as e:
             logger.error(f"Chat error: {e}", exc_info=True)
             error_msg = str(e)
-            if "<html>" in error_msg.lower():
-                error_msg = "Failed to reach LLM API. Check your API Base URL and network settings."
-            yield f"data: {json.dumps({'type': 'error', 'content': error_msg, 'conversation': current_conversation.model_dump() if current_conversation else None})}\n\n"
-            return
-
-        # Save assistant message
-        await add_message(db, req.conversation_id, "assistant", full_content)
-        updated_conversation = await get_conversation(db, req.conversation_id)
-        yield f"data: {json.dumps({'type': 'done', 'content': full_content, 'conversation': updated_conversation.model_dump() if updated_conversation else None})}\n\n"
+            if "API" in error_msg and "key" in error_msg.lower():
+                error_msg = "API key is missing. Please configure it in Settings."
+            yield sse_json("error", {"message": error_msg})
+        finally:
+            await task_lock.cleanup()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
