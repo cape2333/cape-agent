@@ -71,12 +71,10 @@ export async function updateSettings(settings: AppSettings): Promise<AppSettings
 
 // --- Browser ---
 
-export async function connectBrowser(cdpUrl: string): Promise<{ success: boolean; message: string; tool_count: number }> {
+export async function connectBrowser(): Promise<{ success: boolean; message: string; tool_count: number }> {
   await ensureApiUrl();
   const res = await fetch(`${BASE_URL}/api/browser/connect`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cdp_url: cdpUrl }),
   });
   return res.json();
 }
@@ -89,7 +87,7 @@ export async function disconnectBrowser(): Promise<{ success: boolean }> {
   return res.json();
 }
 
-export async function getBrowserStatus(): Promise<{ connected: boolean; cdp_url?: string }> {
+export async function getBrowserStatus(): Promise<{ connected: boolean }> {
   await ensureApiUrl();
   const res = await fetch(`${BASE_URL}/api/browser/status`);
   return res.json();
