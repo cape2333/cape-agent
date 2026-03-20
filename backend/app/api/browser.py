@@ -1,17 +1,12 @@
 import logging
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional
 
 from app.services.browser_service import browser_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/browser")
-
-
-class ConnectRequest(BaseModel):
-    cdp_url: str
 
 
 class ConnectResponse(BaseModel):
@@ -22,14 +17,13 @@ class ConnectResponse(BaseModel):
 
 class StatusResponse(BaseModel):
     connected: bool
-    cdp_url: Optional[str] = None
 
 
 @router.post("/connect", response_model=ConnectResponse)
-async def connect_browser(req: ConnectRequest):
-    """Connect to browser via CDP URL."""
+async def connect_browser():
+    """Launch a stealth browser instance."""
     try:
-        await browser_service.connect(req.cdp_url)
+        await browser_service.connect()
         tools = browser_service.get_tools()
         return ConnectResponse(
             success=True,
@@ -46,10 +40,7 @@ async def connect_browser(req: ConnectRequest):
 
 @router.post("/disconnect")
 async def disconnect_browser():
-    """Disconnect from browser."""
-    import traceback
-    print(f"[BROWSER] Disconnect called (was_connected={browser_service.connected})", flush=True)
-    print(f"[BROWSER] Disconnect caller stack:\n{''.join(traceback.format_stack()[-3:])}", flush=True)
+    """Close the browser."""
     try:
         await browser_service.disconnect()
         return {"success": True, "message": "Disconnected"}
