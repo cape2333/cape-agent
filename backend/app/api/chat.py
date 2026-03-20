@@ -16,7 +16,7 @@ from app.services.conversation_service import (
     conversation_exists,
     get_conversation,
 )
-from app.services.agent_service import build_agent, agent_chat, build_workforce
+from app.services.agent_service import build_agent, agent_chat, build_workforce, summarize_workforce_result
 from app.services.task_lock import TaskLock
 from app.agents.factory import create_classifier_agent, classify_question
 from app.services.agent_service import build_model
@@ -116,7 +116,24 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
                         break
 
                     if event["step"] == "end":
-                        content = event["data"].get("content", "")
+                        subtask_results = event["data"].get(
+                            "subtask_results", {}
+                        )
+                        try:
+                            content = await summarize_workforce_result(
+                                subtask_results,
+                                req.message,
+                                provider,
+                                model_name,
+                                req.api_key,
+                                req.api_base,
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to summarize workforce result: {e}"
+                            )
+                            content = event["data"].get("content", "")
+
                         await add_message(
                             db, req.conversation_id, "assistant", content
                         )
