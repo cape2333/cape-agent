@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Conversation, Message, AppSettings, AgentStep, SSEEvent, TaskStateInfo, SubTask, AgentActivity } from "../types";
+import type { Conversation, Message, AppSettings, AgentStep, SSEEvent, TaskStateInfo, SubTask, AgentActivity, AgentLog } from "../types";
 
 interface AppState {
   // Conversations
@@ -32,16 +32,6 @@ interface AppState {
   setSettings: (settings: AppSettings) => void;
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
-
-  // Browser panel
-  browserPanelVisible: boolean;
-  browserCurrentUrl: string;
-  cdpTargetUrl: string | null;
-  browserPanelRatio: number;
-  setBrowserPanelVisible: (visible: boolean) => void;
-  setBrowserCurrentUrl: (url: string) => void;
-  setCdpTargetUrl: (url: string | null) => void;
-  setBrowserPanelRatio: (ratio: number) => void;
 
   // Agent steps (per-conversation)
   agentSteps: Record<string, AgentStep[]>;
@@ -143,16 +133,6 @@ export const useStore = create<AppState>((set) => ({
   showSettings: false,
   setShowSettings: (show) => set({ showSettings: show }),
 
-  // Browser panel
-  browserPanelVisible: false,
-  browserCurrentUrl: "",
-  cdpTargetUrl: null,
-  browserPanelRatio: 0.5,
-  setBrowserPanelVisible: (visible) => set({ browserPanelVisible: visible }),
-  setBrowserCurrentUrl: (url) => set({ browserCurrentUrl: url }),
-  setCdpTargetUrl: (url) => set({ cdpTargetUrl: url }),
-  setBrowserPanelRatio: (ratio) => set({ browserPanelRatio: ratio }),
-
   // Agent steps
   agentSteps: {},
   addAgentStep: (conversationId, step) =>
@@ -193,6 +173,7 @@ export const useStore = create<AppState>((set) => ({
           status: 'idle',
           subTasks: [],
           activeAgents: [],
+          agentLogs: [],
           streamingDecomposeText: '',
         },
       },
@@ -245,7 +226,7 @@ export const useStore = create<AppState>((set) => ({
             taskStates: {
               ...s.taskStates,
               [conversationId]: {
-                ...(s.taskStates[conversationId] || { subTasks: [], activeAgents: [], streamingDecomposeText: '' }),
+                ...(s.taskStates[conversationId] || { subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '' }),
                 status: 'done',
               },
             },
@@ -274,7 +255,7 @@ export const useStore = create<AppState>((set) => ({
 
         case 'decompose_text': {
           const ts = s.taskStates[conversationId] || {
-            status: 'decomposing', subTasks: [], activeAgents: [], streamingDecomposeText: '',
+            status: 'decomposing', subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '',
           };
           return {
             taskStates: {
@@ -290,7 +271,7 @@ export const useStore = create<AppState>((set) => ({
 
         case 'decompose_progress': {
           const ts2 = s.taskStates[conversationId] || {
-            status: 'decomposing', subTasks: [], activeAgents: [], streamingDecomposeText: '',
+            status: 'decomposing', subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '',
           };
           return {
             taskStates: {
@@ -306,7 +287,7 @@ export const useStore = create<AppState>((set) => ({
 
         case 'assign_task': {
           const ts3 = s.taskStates[conversationId] || {
-            status: 'executing', subTasks: [], activeAgents: [], streamingDecomposeText: '',
+            status: 'executing', subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '',
           };
           return {
             taskStates: {
@@ -326,7 +307,7 @@ export const useStore = create<AppState>((set) => ({
 
         case 'activate_agent': {
           const ts4 = s.taskStates[conversationId] || {
-            status: 'executing', subTasks: [], activeAgents: [], streamingDecomposeText: '',
+            status: 'executing', subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '',
           };
           const newAgent: AgentActivity = {
             agentId: data.agent_id as string,
@@ -334,12 +315,22 @@ export const useStore = create<AppState>((set) => ({
             processTaskId: data.process_task_id as string,
             message: '',
           };
+          const newLog: AgentLog = {
+            agentId: data.agent_id as string,
+            agentName: data.agent_name as string,
+            processTaskId: data.process_task_id as string,
+            status: 'running',
+            inputMessage: (data.message as string) || '',
+            outputMessage: '',
+            timestamp: new Date().toISOString(),
+          };
           return {
             taskStates: {
               ...s.taskStates,
               [conversationId]: {
                 ...ts4,
                 activeAgents: [...ts4.activeAgents, newAgent],
+                agentLogs: [...(ts4.agentLogs || []), newLog],
               },
             },
           };
@@ -347,8 +338,9 @@ export const useStore = create<AppState>((set) => ({
 
         case 'deactivate_agent': {
           const ts5 = s.taskStates[conversationId] || {
-            status: 'executing', subTasks: [], activeAgents: [], streamingDecomposeText: '',
+            status: 'executing', subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '',
           };
+          const isError = typeof data.message === 'string' && data.message.startsWith('Error:');
           return {
             taskStates: {
               ...s.taskStates,
@@ -356,6 +348,11 @@ export const useStore = create<AppState>((set) => ({
                 ...ts5,
                 activeAgents: ts5.activeAgents.filter(
                   a => a.agentId !== data.agent_id
+                ),
+                agentLogs: (ts5.agentLogs || []).map(log =>
+                  log.agentId === data.agent_id
+                    ? { ...log, status: isError ? 'error' as const : 'done' as const, outputMessage: (data.message as string) || '' }
+                    : log
                 ),
               },
             },
@@ -375,6 +372,7 @@ export const useStore = create<AppState>((set) => ({
                   toolArgs: { toolkit: data.toolkit_name, args: data.message },
                   status: 'running' as const,
                   timestamp: new Date().toISOString(),
+                  agentName: data.agent_name as string,
                 },
               ],
             },
@@ -403,7 +401,7 @@ export const useStore = create<AppState>((set) => ({
 
         case 'task_state': {
           const ts6 = s.taskStates[conversationId] || {
-            status: 'executing', subTasks: [], activeAgents: [], streamingDecomposeText: '',
+            status: 'executing', subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '',
           };
           return {
             taskStates: {
@@ -447,7 +445,7 @@ export const useStore = create<AppState>((set) => ({
             taskStates: {
               ...s.taskStates,
               [conversationId]: {
-                ...(s.taskStates[conversationId] || { subTasks: [], activeAgents: [], streamingDecomposeText: '' }),
+                ...(s.taskStates[conversationId] || { subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '' }),
                 status: 'done',
               },
             },

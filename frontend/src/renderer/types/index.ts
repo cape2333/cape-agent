@@ -51,10 +51,21 @@ export interface AgentActivity {
   message: string;
 }
 
+export interface AgentLog {
+  agentId: string;
+  agentName: string;
+  processTaskId: string;
+  status: 'running' | 'done' | 'error';
+  inputMessage: string;
+  outputMessage: string;
+  timestamp: string;
+}
+
 export interface TaskStateInfo {
   status: 'idle' | 'classifying' | 'decomposing' | 'executing' | 'done';
   subTasks: SubTask[];
   activeAgents: AgentActivity[];
+  agentLogs: AgentLog[];
   streamingDecomposeText: string;
 }
 
@@ -66,6 +77,7 @@ export interface AgentStep {
   result?: string;
   status: "running" | "done" | "error";
   timestamp: string;
+  agentName?: string;
 }
 
 export interface SSEEvent {
@@ -73,30 +85,10 @@ export interface SSEEvent {
   data: Record<string, unknown>;
 }
 
-export interface BrowserPanelInfo {
-  visible: boolean;
-  currentUrl: string;
-  cdpPort: number;
-}
-
-export interface BrowserPanelCreateResult {
-  success: boolean;
-  cdpTargetUrl?: string;
-}
-
 declare global {
   interface Window {
     electronAPI: {
       getBackendUrl: () => Promise<string>;
-      browserPanel: {
-        create: () => Promise<BrowserPanelCreateResult>;
-        show: (sidebarWidth?: number, browserPanelRatio?: number) => Promise<{ success: boolean }>;
-        hide: () => Promise<{ success: boolean }>;
-        navigate: (url: string) => Promise<{ success: boolean }>;
-        resize: (sidebarWidth?: number, browserPanelRatio?: number) => Promise<{ success: boolean }>;
-        getInfo: () => Promise<BrowserPanelInfo>;
-        destroy: () => Promise<{ success: boolean }>;
-      };
     };
   }
 }

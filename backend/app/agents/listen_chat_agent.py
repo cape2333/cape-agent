@@ -27,7 +27,7 @@ class ListenChatAgent(ChatAgent):
             "agent_name": self.agent_name,
             "agent_id": self.agent_id,
             "process_task_id": self.process_task_id,
-            "message": "",
+            "message": input_message.content[:500] if hasattr(input_message, 'content') else str(input_message)[:500],
         })
 
         try:
@@ -72,7 +72,7 @@ class ListenChatAgent(ChatAgent):
                 "agent_name": self.agent_name,
                 "toolkit_name": toolkit_name,
                 "method_name": tool_name,
-                "message": str(result)[:500],
+                "message": str(result)[:2000],
             })
             return result
         except Exception as e:
@@ -104,7 +104,7 @@ class ListenChatAgent(ChatAgent):
                 "agent_name": self.agent_name,
                 "toolkit_name": toolkit_name,
                 "method_name": tool_name,
-                "message": str(result)[:500],
+                "message": str(result)[:2000],
             })
             return result
         except Exception as e:
