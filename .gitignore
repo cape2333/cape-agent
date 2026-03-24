@@ -68,6 +68,9 @@ htmlcov/
 # === Claude Code ===
 .claude/
 
+# === Worktrees ===
+.worktrees/
+
 # === Misc ===
 *.tgz
 .cache/
