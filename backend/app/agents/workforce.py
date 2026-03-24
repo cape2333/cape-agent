@@ -23,6 +23,17 @@ from app.services.task_lock import TaskLock
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_SUMMARY_PROMPT = (
+    "\n\nAfter completing the task, please generate a summary of the "
+    "entire task completion. The summary must be enclosed in "
+    "<summary></summary> tags and include:\n"
+    "1. A confirmation of task completion, referencing the original goal.\n"
+    "2. A high-level overview of the work performed and the final outcome.\n"
+    "3. A bulleted list of key results or accomplishments.\n"
+    "4. Any files created or important artifacts, with their full paths.\n"
+    "Adopt a confident and professional tone."
+)
+
 
 class CapeWorkforceCallback(WorkforceCallback):
     """Translates CAMEL Workforce lifecycle events into SSE events."""
@@ -151,8 +162,37 @@ class CapeWorkforce(Workforce):
             result.issues = []
         return result
 
+    def _sync_subtask_to_parent(self, task: Task) -> None:
+        """Sync completed subtask result/state back to parent.subtasks.
+
+        CAMEL stores finished tasks in ``_completed_tasks`` but does not
+        write the result back to ``parent.subtasks[i]``.  This causes
+        ``parent.subtasks[i].result`` to remain ``None`` when the
+        coordinator or evaluator inspects the parent task tree.
+        """
+        parent = task.parent
+        if not parent or not parent.subtasks:
+            return
+
+        for sub in parent.subtasks:
+            if sub.id == task.id:
+                sub.result = task.result
+                sub.state = task.state
+                logger.debug(
+                    f"[SYNC] Synced subtask {task.id} result to parent.subtasks"
+                )
+                return
+
+        logger.warning(f"[SYNC] Subtask {task.id} not found in parent.subtasks")
+
+    async def _handle_completed_task(self, task: Task) -> None:
+        """Sync subtask result to parent before delegating to CAMEL."""
+        self._sync_subtask_to_parent(task)
+        await super()._handle_completed_task(task)
+
     async def run(self, question: str):
-        main_task = Task(content=question, id=f"main_{uuid4().hex[:8]}")
+        task_content = question + DEFAULT_SUMMARY_PROMPT
+        main_task = Task(content=task_content, id=f"main_{uuid4().hex[:8]}")
         self.task_lock.status = Status.decomposing
 
         try:
