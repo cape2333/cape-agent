@@ -1,11 +1,9 @@
-import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from uuid import uuid4
 
 from camel.agents import ChatAgent
 from camel.agents._types import ToolCallRequest
-from camel.toolkits import FunctionTool
 
 from app.services.task_lock import TaskLock
 
@@ -33,15 +31,11 @@ class ListenChatAgent(ChatAgent):
         try:
             response = await super().astep(input_message, **kwargs)
 
-            final_message = ""
-            if hasattr(response, "msg") and response.msg:
-                final_message = response.msg.content or ""
-
             await self.task_lock.put_event("deactivate_agent", {
                 "agent_name": self.agent_name,
                 "agent_id": self.agent_id,
                 "process_task_id": self.process_task_id,
-                "message": final_message,
+                "message": self._response_preview(response),
             })
             return response
 
@@ -72,7 +66,7 @@ class ListenChatAgent(ChatAgent):
                 "agent_name": self.agent_name,
                 "toolkit_name": toolkit_name,
                 "method_name": tool_name,
-                "message": str(result)[:2000],
+                "message": self._tool_result_preview(result),
             })
             return result
         except Exception as e:
@@ -104,7 +98,7 @@ class ListenChatAgent(ChatAgent):
                 "agent_name": self.agent_name,
                 "toolkit_name": toolkit_name,
                 "method_name": tool_name,
-                "message": str(result)[:2000],
+                "message": self._tool_result_preview(result),
             })
             return result
         except Exception as e:
@@ -124,7 +118,19 @@ class ListenChatAgent(ChatAgent):
         cloned.agent_name = self.agent_name
         cloned.agent_id = self.agent_id
         cloned.process_task_id = self.process_task_id
+        # CAMEL-AI's clone() doesn't propagate enable_snapshot_clean
+        cloned._enable_snapshot_clean = self._enable_snapshot_clean
         return cloned
 
     def _resolve_toolkit_name(self, tool_name: str) -> str:
         return tool_name.split("_")[0] if "_" in tool_name else tool_name
+
+    def _response_preview(self, response: Any) -> str:
+        if hasattr(response, "msg") and response.msg:
+            return response.msg.content or ""
+        return ""
+
+    def _tool_result_preview(self, result: Any) -> str:
+        if hasattr(result, "result"):
+            result = result.result
+        return str(result)[:2000]

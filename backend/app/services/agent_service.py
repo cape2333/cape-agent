@@ -1,5 +1,4 @@
 # backend/app/services/agent_service.py
-import json
 import logging
 import os
 import tempfile
@@ -21,6 +20,7 @@ from app.services.browser_service import browser_service
 from app.services.task_lock import TaskLock
 
 logger = logging.getLogger(__name__)
+
 
 PLATFORM_MAP = {
     "openai": ModelPlatformType.OPENAI,
@@ -63,6 +63,8 @@ def build_model(
     model_name: str,
     api_key: Optional[str] = None,
     api_base: Optional[str] = None,
+    *,
+    stream: bool = True,
 ):
     """Create a CAMEL model backend."""
     platform = PLATFORM_MAP.get(provider, ModelPlatformType.OPENAI)
@@ -75,7 +77,7 @@ def build_model(
     return ModelFactory.create(
         model_platform=platform,
         model_type=model_name,
-        model_config_dict={"stream": True, "temperature": 0.7},
+        model_config_dict={"stream": stream, "temperature": 0.7},
         **kwargs,
     )
 
@@ -89,7 +91,13 @@ def build_agent(
     tools: Optional[List[FunctionTool]] = None,
 ) -> ChatAgent:
     """Build a simple ChatAgent for the simple path (no workforce)."""
-    model = build_model(provider, model_name, api_key, api_base)
+    model = build_model(
+        provider,
+        model_name,
+        api_key,
+        api_base,
+        stream=True,
+    )
 
     agent = ChatAgent(
         system_message=DEFAULT_SYSTEM_PROMPT,
@@ -239,7 +247,13 @@ async def build_workforce(
         if env_key:
             os.environ[env_key] = api_key
 
-    model = build_model(provider, model_name, api_key, api_base)
+    model = build_model(
+        provider,
+        model_name,
+        api_key,
+        api_base,
+        stream=False,
+    )
 
     working_dir = tempfile.mkdtemp(prefix=f"cape_{task_lock.id[:8]}_")
     task_lock.working_directory = working_dir
