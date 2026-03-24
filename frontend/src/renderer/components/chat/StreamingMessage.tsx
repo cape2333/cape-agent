@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import ReactMarkdown from "react-markdown";
+import MarkdownContent from "./MarkdownContent";
 import { Loader2, CheckCircle, XCircle, Globe, Brain, ChevronDown, ChevronRight, User, Bot } from "lucide-react";
 import type { AgentStep, AgentLog, TaskStateInfo } from "../../types";
 import TaskProgress from "./TaskProgress";
@@ -229,7 +229,7 @@ const StreamingMessage: React.FC<Props> = ({ content, agentSteps, taskState }) =
         {/* Text content */}
         {content && (
           <div className="prose prose-warm prose-sm max-w-none text-warm-700">
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <MarkdownContent content={content} />
             <span className="inline-block w-1.5 h-4 bg-accent-500 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
           </div>
         )}

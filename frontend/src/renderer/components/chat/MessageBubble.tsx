@@ -1,5 +1,5 @@
 import React from "react";
-import ReactMarkdown from "react-markdown";
+import MarkdownContent from "./MarkdownContent";
 import type { Message } from "../../types";
 
 interface Props {
@@ -23,7 +23,7 @@ const MessageBubble: React.FC<Props> = ({ message }) => {
     <div className="flex px-4 py-2">
       <div className="max-w-[85%] bg-white px-4 py-3 rounded-2xl rounded-bl-md shadow-sm border border-warm-200">
         <div className="prose prose-warm prose-sm max-w-none text-warm-700">
-          <ReactMarkdown>{message.content}</ReactMarkdown>
+          <MarkdownContent content={message.content} />
         </div>
       </div>
     </div>
