@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @theme {
   --color-warm-50: #FEFCF9;
@@ -122,13 +123,40 @@ body {
   animation: breathe 2.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
-/* Override prose for light theme */
-.prose-warm {
-  --tw-prose-body: #4D4538;
-  --tw-prose-headings: #352F25;
-  --tw-prose-links: #D4874D;
-  --tw-prose-bold: #352F25;
-  --tw-prose-code: #C07639;
-  --tw-prose-pre-bg: #F5F1EA;
-  --tw-prose-pre-code: #4D4538;
+/* Override prose for warm theme */
+@utility prose-warm {
+  --tw-prose-body: var(--color-warm-700);
+  --tw-prose-headings: var(--color-warm-800);
+  --tw-prose-lead: var(--color-warm-600);
+  --tw-prose-links: var(--color-accent-500);
+  --tw-prose-bold: var(--color-warm-800);
+  --tw-prose-counters: var(--color-warm-500);
+  --tw-prose-bullets: var(--color-warm-400);
+  --tw-prose-hr: var(--color-warm-200);
+  --tw-prose-quotes: var(--color-warm-800);
+  --tw-prose-quote-borders: var(--color-warm-300);
+  --tw-prose-captions: var(--color-warm-600);
+  --tw-prose-code: var(--color-accent-600);
+  --tw-prose-pre-code: var(--color-warm-700);
+  --tw-prose-pre-bg: var(--color-warm-150);
+  --tw-prose-th-borders: var(--color-warm-300);
+  --tw-prose-td-borders: var(--color-warm-200);
+}
+
+/* Code block container styling */
+.prose pre {
+  background: var(--color-warm-150);
+  border: 1px solid var(--color-warm-200);
+  border-radius: 0.5rem;
+}
+
+/* GFM task list checkbox styling */
+.prose input[type="checkbox"] {
+  accent-color: var(--color-accent-500);
+  margin-right: 0.375rem;
+}
+
+/* GFM strikethrough */
+.prose del {
+  color: var(--color-warm-400);
 }
