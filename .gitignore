@@ -65,6 +65,9 @@ htmlcov/
 # === Runtime ===
 .backend_port
 
+# === Claude Code ===
+.claude/
+
 # === Misc ===
 *.tgz
 .cache/
