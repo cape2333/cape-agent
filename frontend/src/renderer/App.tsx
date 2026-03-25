@@ -1,19 +1,16 @@
 import React, { useEffect } from "react";
-import { PanelLeftOpen, Search, SquarePen } from "lucide-react";
+import { PanelLeftOpen } from "lucide-react";
 import Sidebar from "./components/layout/Sidebar";
 import ChatArea from "./components/layout/ChatArea";
 import InputBar from "./components/layout/InputBar";
 import SettingsModal from "./components/settings/SettingsModal";
 import { useStore } from "./stores/store";
-import { useConversations } from "./hooks/useConversations";
 import { initApiUrl } from "./services/api";
 
 const App: React.FC = () => {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const theme = useStore((s) => s.settings.theme);
-  const { createNew } = useConversations();
-
   useEffect(() => {
     initApiUrl();
   }, []);
@@ -36,13 +33,13 @@ const App: React.FC = () => {
   }, [theme]);
 
   return (
-    <div className="flex h-full bg-warm-100 text-warm-800">
+    <div className="flex h-full bg-warm-100 text-navy">
       <div
         className="sidebar-transition flex-shrink-0 overflow-hidden"
-        style={{ width: sidebarCollapsed ? 0 : 268 }}
+        style={{ width: sidebarCollapsed ? 0 : 320 }}
       >
-        <div className="h-full p-1.5" style={{ width: 268 }}>
-          <div className="h-full bg-white rounded-2xl border border-warm-200 shadow-sm overflow-hidden">
+        <div className="h-full" style={{ width: 320 }}>
+          <div className="h-full bg-surface border-r border-warm-200/40 overflow-hidden">
             <Sidebar />
           </div>
         </div>
@@ -50,7 +47,7 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Drag region for macOS title bar */}
         <div
-          className="h-12 flex-shrink-0 border-b border-warm-200 flex items-center justify-between"
+          className="h-12 flex-shrink-0 flex items-center justify-between"
           style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         >
           {sidebarCollapsed ? (
@@ -60,26 +57,11 @@ const App: React.FC = () => {
             >
               <button
                 onClick={toggleSidebar}
-                className="p-1.5 rounded-lg text-warm-400 hover:text-warm-600 hover:bg-warm-200 transition-colors"
+                className="p-1.5 rounded-lg text-navy-light hover:text-navy hover:bg-warm-200 transition-colors"
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
                 title="Open sidebar"
               >
                 <PanelLeftOpen size={16} />
-              </button>
-              <button
-                className="p-1.5 rounded-lg text-warm-400 hover:text-warm-600 hover:bg-warm-200 transition-colors"
-                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-                title="Search"
-              >
-                <Search size={16} />
-              </button>
-              <button
-                onClick={createNew}
-                className="p-1.5 rounded-lg text-warm-400 hover:text-warm-600 hover:bg-warm-200 transition-colors"
-                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-                title="New chat"
-              >
-                <SquarePen size={16} />
               </button>
             </div>
           ) : (

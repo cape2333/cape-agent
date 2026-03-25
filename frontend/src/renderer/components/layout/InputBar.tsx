@@ -14,7 +14,9 @@ const InputBar: React.FC = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height =
-        Math.min(textareaRef.current.scrollHeight, 200) + "px";
+        Math.min(textareaRef.current.scrollHeight, 120) + "px";
+      textareaRef.current.style.overflowY =
+        textareaRef.current.scrollHeight > 120 ? "auto" : "hidden";
     }
   }, [input]);
 
@@ -34,9 +36,9 @@ const InputBar: React.FC = () => {
   const canSend = input.trim() && !isStreaming && activeConversationId;
 
   return (
-    <div className="px-4 pb-5">
-      <div className="bg-white rounded-2xl shadow-sm border border-warm-200 overflow-hidden">
-          {/* Textarea area */}
+    <div className="px-4 pb-8">
+      <div className="max-w-[720px] mx-auto">
+        <div className="input-focus-lift bg-surface rounded-[40px] pl-7 pr-3 py-3 flex items-end shadow-[0_15px_45px_rgba(5,25,45,0.08)]">
           <textarea
             ref={textareaRef}
             value={input}
@@ -49,20 +51,27 @@ const InputBar: React.FC = () => {
             }
             disabled={!activeConversationId || isStreaming}
             rows={1}
-            className="w-full px-4 pt-3 pb-2 resize-none outline-none placeholder-warm-400 disabled:opacity-50 bg-transparent text-warm-800 text-sm"
-            style={{ minHeight: "80px" }}
+            className="flex-1 border-none bg-transparent py-3 text-base font-semibold text-warm-600 resize-none outline-none mr-4 placeholder-warm-300"
+            style={{ minHeight: "24px", maxHeight: "120px", lineHeight: 1.5 }}
           />
-          {/* Bottom row: send button */}
-          <div className="flex items-center justify-end px-3 pb-3">
+          <div className="flex items-center gap-2.5 pb-1">
             <button
               onClick={handleSubmit}
               disabled={!canSend}
-              className="p-2 bg-accent-500 hover:bg-accent-600 disabled:bg-warm-300 disabled:text-warm-400 text-white rounded-xl transition-colors"
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                canSend
+                  ? "bg-pastel-purple text-navy hover:brightness-95 hover:scale-105 cursor-pointer"
+                  : "bg-warm-300 text-warm-400 cursor-not-allowed"
+              }`}
             >
-              <ArrowUp size={16} />
+              <ArrowUp size={18} strokeWidth={2} />
             </button>
           </div>
         </div>
+        <p className="text-center text-[12px] font-semibold text-navy-light mt-5">
+          Cape Agent may produce inaccurate responses. Verify critical data.
+        </p>
+      </div>
     </div>
   );
 };
