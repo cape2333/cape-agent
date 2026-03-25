@@ -8,10 +8,10 @@ interface Props {
 
 const stateIcon: Record<string, React.ReactNode> = {
   open: <Clock size={12} className="text-warm-400" />,
-  waiting: <Clock size={12} className="text-yellow-500" />,
+  waiting: <Clock size={12} className="text-warning" />,
   running: <Loader2 size={12} className="text-accent-500 animate-spin" />,
-  done: <CheckCircle size={12} className="text-green-500" />,
-  failed: <XCircle size={12} className="text-red-500" />,
+  done: <CheckCircle size={12} className="text-pastel-green" />,
+  failed: <XCircle size={12} className="text-danger-500" />,
 };
 
 const TaskProgress: React.FC<Props> = ({ subTasks }) => {
@@ -26,10 +26,10 @@ const TaskProgress: React.FC<Props> = ({ subTasks }) => {
     <div className="mb-3">
       <div className="flex items-center gap-2 mb-2">
         <ListTodo size={14} className="text-warm-500" />
-        <span className="text-xs font-medium text-warm-600">
+        <span className="text-xs font-bold text-navy-light">
           Tasks ({completed}/{subTasks.length})
         </span>
-        <div className="flex-1 h-1.5 bg-warm-100 rounded-full overflow-hidden">
+        <div className="flex-1 h-1.5 bg-warm-200 rounded-full overflow-hidden">
           <div
             className="h-full bg-accent-500 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
@@ -43,7 +43,7 @@ const TaskProgress: React.FC<Props> = ({ subTasks }) => {
               {stateIcon[task.state] || stateIcon.open}
             </div>
             <div className="min-w-0">
-              <span className="text-warm-600">{task.content}</span>
+              <span className="text-navy-light">{task.content}</span>
               {task.assigneeId && (
                 <span className="text-warm-400 ml-1">
                   [{task.assigneeId}]
