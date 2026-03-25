@@ -8,16 +8,21 @@ export function useSettings() {
   const loadSettings = useCallback(async () => {
     try {
       const s = await api.fetchSettings();
-      setSettings(s);
+      setSettings({ ...s, theme: s.theme || settings.theme });
     } catch {
       // use defaults
     }
-  }, [setSettings]);
+  }, [setSettings, settings.theme]);
 
   const saveSettings = useCallback(
     async (newSettings: typeof settings) => {
-      const saved = await api.updateSettings(newSettings);
-      setSettings(saved);
+      try {
+        const saved = await api.updateSettings(newSettings);
+        setSettings({ ...saved, theme: newSettings.theme });
+      } catch {
+        // Apply settings locally even if backend is unavailable
+        setSettings(newSettings);
+      }
     },
     [setSettings]
   );
