@@ -1,5 +1,6 @@
 import React from "react";
 import { Sun, Moon, Monitor } from "lucide-react";
+import { useStore } from "../../stores/store";
 import type { AppSettings } from "../../types";
 
 const THEME_OPTIONS = [
@@ -14,15 +15,24 @@ interface Props {
 }
 
 const GeneralSettings: React.FC<Props> = ({ draft, onUpdate }) => {
+  const setSettings = useStore((s) => s.setSettings);
+
+  const handleThemeChange = (theme: AppSettings["theme"]) => {
+    const updated = { ...draft, theme };
+    onUpdate(updated);
+    // Apply theme immediately (don't wait for Save + API)
+    setSettings(updated);
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-medium text-warm-600 mb-1">Appearance</h3>
-        <p className="text-xs text-warm-400 mb-4">
+        <h3 className="text-sm font-bold text-navy mb-1">Appearance</h3>
+        <p className="text-xs text-navy-light mb-4">
           Choose how Cape looks to you.
         </p>
-        <div className="border border-warm-200 rounded-xl p-4 bg-warm-50">
-          <label className="block text-xs text-warm-500 mb-3 font-medium">
+        <div className="border border-warm-200/60 rounded-2xl p-5 bg-warm-50">
+          <label className="block text-xs text-navy-light mb-3 font-bold">
             Theme
           </label>
           <div className="flex gap-3">
@@ -32,11 +42,11 @@ const GeneralSettings: React.FC<Props> = ({ draft, onUpdate }) => {
               return (
                 <button
                   key={opt.value}
-                  onClick={() => onUpdate({ ...draft, theme: opt.value })}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                  onClick={() => handleThemeChange(opt.value)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-colors border ${
                     isSelected
-                      ? "border-accent-500 bg-accent-500/10 text-accent-600"
-                      : "border-warm-200 bg-white text-warm-600 hover:bg-warm-100"
+                      ? "border-navy bg-navy/5 text-navy"
+                      : "border-warm-200 bg-surface text-navy-light hover:bg-warm-100"
                   }`}
                 >
                   <Icon size={16} />
