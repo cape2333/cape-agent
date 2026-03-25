@@ -1,15 +1,11 @@
 import React, { useEffect, useRef } from "react";
 import { useChat } from "../../hooks/useChat";
-import { useConversations } from "../../hooks/useConversations";
 import { useStore } from "../../stores/store";
 import MessageBubble from "../chat/MessageBubble";
 import StreamingMessage from "../chat/StreamingMessage";
-import { Plus } from "lucide-react";
-import appIcon from "../../../resources/icon.png";
 
 const ChatArea: React.FC = () => {
   const { messages, isStreaming, streamingContent, agentSteps, taskState } = useChat();
-  const { createNew } = useConversations();
   const activeConversationId = useStore((s) => s.activeConversationId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const justSwitchedRef = useRef(false);
@@ -30,18 +26,34 @@ const ChatArea: React.FC = () => {
 
   if (!activeConversationId) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <img src={appIcon} alt="Cape Agent" className="w-20 h-20 mx-auto mb-6 rounded-2xl" />
-          <p className="text-xl font-medium text-warm-700 mb-2">Agent for Cape Long</p>
-          <p className="text-sm text-warm-400 mb-8">Your intelligent assistant, ready to help.</p>
-          <button
-            onClick={createNew}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent-500 text-white text-sm font-medium hover:bg-accent-600 transition-colors"
-          >
-            <Plus size={16} />
-            New Chat
-          </button>
+      <div className="flex-1 flex flex-col items-center justify-center pb-[10vh]">
+        {/* Animated Orb */}
+        <div className="relative w-[220px] h-[220px] flex items-center justify-center mb-12">
+          <div
+            className="orb-ring-1 absolute w-[240px] h-[240px] bg-pastel-purple opacity-90"
+            style={{ top: '50%', left: '50%', transform: 'translate(-45%, -55%)', zIndex: 2 }}
+          />
+          <div
+            className="orb-ring-2 absolute w-[200px] h-[200px] bg-pastel-blue opacity-90"
+            style={{ top: '50%', left: '50%', transform: 'translate(-60%, -40%)', zIndex: 1 }}
+          />
+          <div
+            className="orb w-full h-full relative"
+            style={{
+              background: 'linear-gradient(135deg, var(--color-pastel-pink) 0%, var(--color-surface) 100%)',
+              zIndex: 3,
+            }}
+          />
+        </div>
+
+        {/* Hero text */}
+        <div className="text-center flex flex-col items-center gap-4">
+          <h1 className="text-8xl font-black tracking-tight text-navy leading-none">
+            Cape
+          </h1>
+          <div className="text-base font-bold text-navy bg-surface px-6 py-2.5 rounded-full shadow-[0_8px_25px_rgba(5,25,45,0.05)]">
+            Awaiting Input
+          </div>
         </div>
       </div>
     );
