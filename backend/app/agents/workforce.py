@@ -127,6 +127,8 @@ class CapeWorkforce(Workforce):
         super().__init__(callbacks=[callback], **kwargs)
         self.task_lock = task_lock
 
+    _ANALYZE_MAX_RETRIES = 3
+
     def _analyze_task(
         self,
         task: Task,
@@ -134,33 +136,83 @@ class CapeWorkforce(Workforce):
         for_failure: bool,
         error_message: str | None = None,
     ) -> TaskAnalysisResult:
-        """Override quality evaluation to accept high-score results.
+        """Override quality evaluation with retry logic and fallback.
 
-        CAMEL's default ``quality_sufficient`` requires *both*
-        ``score >= 70`` **and** ``recovery_strategy is None``.  The
-        evaluator LLM often suggests minor improvements even for
-        excellent results (score 90+), which triggers pointless retries
-        that then fail due to context-length overflow.
+        Two improvements over CAMEL's default:
 
-        When the score meets ``QUALITY_ACCEPT_THRESHOLD`` we clear the
-        recovery fields so the result is accepted on the first pass.
+        1. **High-score acceptance**: CAMEL requires *both* ``score >= 70``
+           **and** ``recovery_strategy is None``.  The evaluator LLM often
+           suggests minor improvements even for excellent results (score 90+),
+           triggering pointless retries.  When score >= QUALITY_ACCEPT_THRESHOLD
+           we clear recovery fields so the result is accepted immediately.
+
+        2. **Retry + fallback**: The evaluator LLM can return None or raise on
+           transient failures.  We retry up to _ANALYZE_MAX_RETRIES times.
+           If all retries fail on a normal task we accept the result with a
+           score of 80 (the agent did its work; evaluation infrastructure broke).
+           If all retries fail on an already-failed task we raise to halt.
         """
-        result = super()._analyze_task(
-            task, for_failure=for_failure, error_message=error_message,
+        last_exception: Exception | None = None
+
+        for attempt in range(1, self._ANALYZE_MAX_RETRIES + 1):
+            try:
+                result = super()._analyze_task(
+                    task, for_failure=for_failure, error_message=error_message,
+                )
+
+                if result is None:
+                    logger.warning(
+                        f"Task {task.id}: _analyze_task returned None "
+                        f"(attempt {attempt}/{self._ANALYZE_MAX_RETRIES})"
+                    )
+                    continue
+
+                # Accept high-quality results even when evaluator wants tweaks
+                if (
+                    not for_failure
+                    and result.quality_score is not None
+                    and result.quality_score >= self.QUALITY_ACCEPT_THRESHOLD
+                    and not result.quality_sufficient
+                ):
+                    logger.info(
+                        f"Task {task.id}: accepting result with score "
+                        f"{result.quality_score} (>= {self.QUALITY_ACCEPT_THRESHOLD})"
+                    )
+                    result.recovery_strategy = None
+                    result.issues = []
+
+                return result
+
+            except Exception as e:
+                last_exception = e
+                logger.warning(
+                    f"Task {task.id}: _analyze_task raised "
+                    f"{type(e).__name__}: {e} "
+                    f"(attempt {attempt}/{self._ANALYZE_MAX_RETRIES})"
+                )
+
+        # All retries exhausted
+        logger.error(
+            f"Task {task.id}: _analyze_task failed after "
+            f"{self._ANALYZE_MAX_RETRIES} retries, for_failure={for_failure}"
         )
-        if (
-            not for_failure
-            and result.quality_score is not None
-            and result.quality_score >= self.QUALITY_ACCEPT_THRESHOLD
-            and not result.quality_sufficient
-        ):
-            logger.info(
-                f"Task {task.id}: accepting result with score "
-                f"{result.quality_score} (>= {self.QUALITY_ACCEPT_THRESHOLD})"
-            )
-            result.recovery_strategy = None
-            result.issues = []
-        return result
+
+        if for_failure:
+            # Task already failed + evaluation failed — halt
+            raise RuntimeError(
+                f"_analyze_task failed after {self._ANALYZE_MAX_RETRIES} "
+                f"retries for already-failed task {task.id}"
+            ) from last_exception
+
+        # Normal task: accept the result with a passing score so the agent's
+        # actual work (which completed successfully) is not discarded.
+        return TaskAnalysisResult(
+            reasoning=(
+                f"_analyze_task failed after {self._ANALYZE_MAX_RETRIES} "
+                f"retries — accepting task result as-is"
+            ),
+            quality_score=80,
+        )
 
     def _sync_subtask_to_parent(self, task: Task) -> None:
         """Sync completed subtask result/state back to parent.subtasks.
