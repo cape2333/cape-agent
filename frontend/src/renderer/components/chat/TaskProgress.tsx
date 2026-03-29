@@ -22,6 +22,9 @@ const TaskProgress: React.FC<Props> = ({ subTasks }) => {
   ).length;
   const progress = Math.round((completed / subTasks.length) * 100);
 
+  // Build a lookup from task ID to a short label (1-based index)
+  const taskIndex = new Map(subTasks.map((t, i) => [t.id, i + 1]));
+
   return (
     <div className="mb-3">
       <div className="flex items-center gap-2 mb-2">
@@ -37,17 +40,25 @@ const TaskProgress: React.FC<Props> = ({ subTasks }) => {
         </div>
       </div>
       <div className="space-y-1">
-        {subTasks.map((task) => (
+        {subTasks.map((task, idx) => (
           <div key={task.id} className="flex items-start gap-2 text-xs">
             <div className="flex-shrink-0 mt-0.5">
               {stateIcon[task.state] || stateIcon.open}
             </div>
             <div className="min-w-0">
-              <span className="text-navy-light">{task.content}</span>
+              <span className="text-navy-light">
+                <span className="text-warm-400 mr-1">#{idx + 1}</span>
+                {task.content}
+              </span>
               {task.assigneeId && (
                 <span className="text-warm-400 ml-1">
                   [{task.assigneeId}]
                 </span>
+              )}
+              {task.dependencies && task.dependencies.length > 0 && task.state === "waiting" && (
+                <div className="text-warning mt-0.5 text-[10px]">
+                  Blocked by: {task.dependencies.map(dep => `#${taskIndex.get(dep) ?? '?'}`).join(', ')}
+                </div>
               )}
               {task.result && task.state === "done" && (
                 <div className="text-warm-400 mt-0.5 truncate">
