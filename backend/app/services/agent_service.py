@@ -166,6 +166,44 @@ def _extract_summary(text: str) -> str:
     return text
 
 
+def build_conversation_context(task_lock: TaskLock) -> str:
+    """Build structured context from previous workforce rounds.
+
+    Returns a formatted string summarizing all previous rounds'
+    task content, results, and generated files. Returns empty string
+    if no conversation history exists.
+    """
+    if not task_lock.conversation_history:
+        return ""
+
+    parts = ["=== CONVERSATION HISTORY ==="]
+    for i, entry in enumerate(task_lock.conversation_history, 1):
+        parts.append(f"\n**Round {i}**")
+        parts.append(f"Task: {entry['task_content']}")
+        result = entry.get("task_result", "")
+        if result:
+            parts.append(f"Result: {result}")
+
+    # Collect all generated files across rounds
+    all_dirs = [
+        e["working_directory"]
+        for e in task_lock.conversation_history
+        if e.get("working_directory")
+    ]
+    if all_dirs:
+        files = []
+        for d in all_dirs:
+            dir_path = Path(d)
+            if dir_path.exists():
+                files.extend(
+                    str(f) for f in dir_path.rglob("*") if f.is_file()
+                )
+        if files:
+            parts.append(f"\nGenerated Files: {files}")
+
+    return "\n".join(parts)
+
+
 def _make_message(role: str, content: str) -> BaseMessage:
     if role == "user":
         return BaseMessage(
