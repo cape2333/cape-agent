@@ -1,8 +1,10 @@
 # backend/app/services/agent_service.py
 import logging
 import os
+import platform
 import re
-import tempfile
+from datetime import datetime
+from pathlib import Path
 from typing import AsyncGenerator, List, Optional
 
 from camel.agents import ChatAgent
@@ -46,9 +48,18 @@ PROVIDER_ENV_KEY = {
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant."
 
-COORDINATOR_PROMPT = """\
+COORDINATOR_PROMPT_TEMPLATE = """\
 You are the Coordinator of a multi-agent workforce. Your role is to oversee \
 task execution and ensure all subtasks are completed successfully.
+
+<operating_environment>
+- **System**: {platform_system} ({platform_machine})
+- **Working Directory**: `{working_directory}`. All agents share this \
+directory for file operations. Any file paths in subtasks MUST use this \
+directory as the base path. Do NOT invent paths like /workspace, /output, \
+or /tmp — always use the working directory above.
+- **Current Date**: {now_str}
+</operating_environment>
 
 <available_workers>
 You have the following specialized agents at your disposal:
@@ -71,12 +82,23 @@ needs improvement before requesting a retry.
 - Monitor overall progress and ensure the final output addresses the \
 user's original request completely.
 - Prefer parallel execution when subtasks are independent.
+- When a subtask requires file output, specify the exact file path using \
+the working directory (e.g., `{working_directory}/output.py`).
 </coordination_strategy>
 """
 
-TASK_DECOMPOSER_PROMPT = """\
+TASK_DECOMPOSER_PROMPT_TEMPLATE = """\
 You decompose complex tasks into smaller, actionable subtasks for a \
 multi-agent workforce.
+
+<operating_environment>
+- **System**: {platform_system} ({platform_machine})
+- **Working Directory**: `{working_directory}`. All file output MUST be \
+saved to this directory. Use absolute paths based on this directory in \
+subtask descriptions. Do NOT use generic paths like /workspace, /output, \
+or /tmp — always use the working directory above.
+- **Current Date**: {now_str}
+</operating_environment>
 
 <available_workers>
 The workforce has these specialized agents:
@@ -99,6 +121,8 @@ Independent subtasks should be marked for parallel execution.
 many tiny tasks adds overhead without benefit.
 - Each subtask description should be self-contained with enough context \
 for the assigned agent to work independently.
+- When a subtask requires file output, specify the exact file path using \
+the working directory (e.g., `{working_directory}/output.py`).
 </decomposition_principles>
 """
 
@@ -161,19 +185,24 @@ def build_model(
     api_base: Optional[str] = None,
     *,
     stream: bool = True,
+    extra_config: Optional[dict] = None,
 ):
     """Create a CAMEL model backend."""
-    platform = PLATFORM_MAP.get(provider, ModelPlatformType.OPENAI)
+    plat = PLATFORM_MAP.get(provider, ModelPlatformType.OPENAI)
     kwargs = {}
     if api_key:
         kwargs["api_key"] = api_key
     if api_base:
         kwargs["url"] = api_base
 
+    config = {"stream": stream, "temperature": 0.7}
+    if extra_config:
+        config.update(extra_config)
+
     return ModelFactory.create(
-        model_platform=platform,
+        model_platform=plat,
         model_type=model_name,
-        model_config_dict={"stream": stream, "temperature": 0.7},
+        model_config_dict=config,
         **kwargs,
     )
 
@@ -343,17 +372,30 @@ async def build_workforce(
         stream=False,
     )
 
-    working_dir = tempfile.mkdtemp(prefix=f"cape_{task_lock.id[:8]}_")
+    working_dir = str(
+        Path.home() / ".cape-agent" / "workspace" / task_lock.id
+    )
+    os.makedirs(working_dir, exist_ok=True)
     task_lock.working_directory = working_dir
+
+    # Format prompts with environment info so coordinator and task
+    # decomposer use the correct working directory instead of inventing
+    # paths like /workspace that may not exist on the host OS.
+    env_vars = dict(
+        working_directory=working_dir,
+        platform_system=platform.system(),
+        platform_machine=platform.machine(),
+        now_str=datetime.now().strftime("%Y-%m-%d %H:%M"),
+    )
 
     # Create coordinator and task agents with user's model/API key
     # Without these, CAMEL uses default models that lack credentials
     coordinator = ChatAgent(
-        system_message=COORDINATOR_PROMPT,
+        system_message=COORDINATOR_PROMPT_TEMPLATE.format(**env_vars),
         model=model,
     )
     task_agent = ChatAgent(
-        system_message=TASK_DECOMPOSER_PROMPT,
+        system_message=TASK_DECOMPOSER_PROMPT_TEMPLATE.format(**env_vars),
         model=model,
     )
 
@@ -373,7 +415,13 @@ async def build_workforce(
             logger.warning(f"Browser auto-connect failed: {e}")
 
     if browser_service.connected:
-        browser_agent = create_browser_agent(task_lock, model, working_dir)
+        # Browser agent needs its own model with parallel_tool_calls disabled
+        # to avoid concurrent browser actions that corrupt page state.
+        browser_model = build_model(
+            provider, model_name, api_key, api_base, stream=False,
+            extra_config={"parallel_tool_calls": False},
+        )
+        browser_agent = create_browser_agent(task_lock, browser_model, working_dir)
         workforce.add_single_agent_worker(
             description="Web research, browsing, and information gathering",
             worker=browser_agent,
