@@ -247,9 +247,29 @@ class CapeWorkforce(Workforce):
         main_task = Task(content=task_content, id=f"main_{uuid4().hex[:8]}")
         self.task_lock.status = Status.decomposing
 
+        # Inject conversation history so the decomposer knows what
+        # previous rounds accomplished (files created, results, etc.)
+        # Lazy import to avoid circular dependency: agent_service imports
+        # CapeWorkforce, so a top-level import here would fail.
+        from app.services.agent_service import build_conversation_context
+
+        context = build_conversation_context(self.task_lock)
+        if context:
+            original_content = main_task.content
+            main_task.content = (
+                context
+                + "\n\n=== CURRENT TASK ===\n"
+                + original_content
+            )
+
         try:
             self.task_lock.status = Status.executing
             result = await self.process_task_async(main_task)
+
+            # Restore original content to avoid polluting the task tree
+            if context:
+                main_task.content = original_content
+
             return result
         except Exception as e:
             await self.task_lock.put_event("error", {
