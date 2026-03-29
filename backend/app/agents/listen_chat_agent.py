@@ -13,8 +13,19 @@ logger = logging.getLogger(__name__)
 class ListenChatAgent(ChatAgent):
     """ChatAgent that emits SSE events for agent activation and tool execution."""
 
-    def __init__(self, task_lock: TaskLock, agent_name: str, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        task_lock: TaskLock,
+        agent_name: str,
+        tool_execution_timeout: float | None = None,
+        step_timeout: float | None = 600,
+        **kwargs,
+    ):
+        super().__init__(
+            step_timeout=step_timeout,
+            tool_execution_timeout=tool_execution_timeout,
+            **kwargs,
+        )
         self.task_lock = task_lock
         self.agent_name = agent_name
         self.agent_id = f"{agent_name.lower().replace(' ', '_')}_{uuid4().hex[:8]}"
