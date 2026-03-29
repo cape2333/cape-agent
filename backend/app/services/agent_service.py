@@ -108,8 +108,24 @@ The workforce has these specialized agents:
 </available_workers>
 
 <decomposition_principles>
-- Keep subtasks simple and focused — each should be completable by a \
-single agent in one step.
+- **Self-contained subtasks**: Each subtask MUST be fully independent and \
+understandable in isolation. Do NOT use relative references like "based on \
+the previous step", "from the first task", or "using the above results". \
+If a subtask needs upstream output, explicitly describe the required \
+content (e.g., "Analyze the document titled 'React Framework Comparison' \
+saved at {working_directory}/comparison.md").
+- **Strategic grouping**: Sequential actions that require the same worker \
+type SHOULD be grouped into a single subtask to reduce scheduling \
+overhead. For example, "search for React info" + "search for Vue info" \
+should be one Browser Agent subtask, not two.
+- **Aggressive parallelization**: Different worker specializations MUST be \
+split into separate subtasks to enable parallel execution. Multiple \
+independent items of the same type SHOULD also be split into parallel \
+subtasks when they don't share state.
+- **Balanced granularity**: Each subtask should be large enough to be \
+meaningful and small enough for effective parallelism. Avoid \
+over-decomposition — splitting into too many tiny tasks adds overhead \
+without benefit.
 - Match subtasks to agent capabilities: research tasks for Browser Agent, \
 coding tasks for Developer Agent, document tasks for Document Agent.
 - Identify dependencies between subtasks and order them logically. \
@@ -117,8 +133,6 @@ Independent subtasks should be marked for parallel execution.
 - NEVER ask agents to extract raw HTML or full page source code.
 - NEVER create overly detailed extraction schemas.
 - Focus on high-level goals: browse, summarize, write, code.
-- Aim for 2-5 subtasks. Avoid over-decomposition — splitting into too \
-many tiny tasks adds overhead without benefit.
 - Each subtask description should be self-contained with enough context \
 for the assigned agent to work independently.
 - When a subtask requires file output, specify the exact file path using \
@@ -164,6 +178,44 @@ def _extract_summary(text: str) -> str:
     if len(text) > 3000:
         return text[:3000] + "\n... (truncated)"
     return text
+
+
+def build_conversation_context(task_lock: TaskLock) -> str:
+    """Build structured context from previous workforce rounds.
+
+    Returns a formatted string summarizing all previous rounds'
+    task content, results, and generated files. Returns empty string
+    if no conversation history exists.
+    """
+    if not task_lock.conversation_history:
+        return ""
+
+    parts = ["=== CONVERSATION HISTORY ==="]
+    for i, entry in enumerate(task_lock.conversation_history, 1):
+        parts.append(f"\n**Round {i}**")
+        parts.append(f"Task: {entry['task_content']}")
+        result = entry.get("task_result", "")
+        if result:
+            parts.append(f"Result: {result}")
+
+    # Collect all generated files across rounds
+    all_dirs = [
+        e["working_directory"]
+        for e in task_lock.conversation_history
+        if e.get("working_directory")
+    ]
+    if all_dirs:
+        files = []
+        for d in all_dirs:
+            dir_path = Path(d)
+            if dir_path.exists():
+                files.extend(
+                    str(f) for f in dir_path.rglob("*") if f.is_file()
+                )
+        if files:
+            parts.append(f"\nGenerated Files: {files}")
+
+    return "\n".join(parts)
 
 
 def _make_message(role: str, content: str) -> BaseMessage:

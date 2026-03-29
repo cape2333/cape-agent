@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
+# Registry of active TaskLocks per conversation, preserving
+# conversation_history across multiple workforce rounds.
+_active_task_locks: dict[str, TaskLock] = {}
+
 
 @router.post("/chat")
 async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
@@ -45,10 +49,19 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
     logger.info(f"[CHAT] provider={provider}, model={model_name}")
 
     async def event_stream():
-        task_lock = TaskLock(
-            id=req.conversation_id,
-            status=Status.classifying,
-        )
+        task_lock = _active_task_locks.get(req.conversation_id)
+        if task_lock is None:
+            task_lock = TaskLock(
+                id=req.conversation_id,
+                status=Status.classifying,
+            )
+            _active_task_locks[req.conversation_id] = task_lock
+        else:
+            # Reuse existing TaskLock (preserves conversation_history)
+            # but reset per-round state
+            task_lock.status = Status.classifying
+            task_lock.queue = asyncio.Queue()
+            task_lock.background_tasks = set()
 
         try:
             # Classify question
@@ -133,6 +146,13 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
                                 f"Failed to summarize workforce result: {e}"
                             )
                             content = event["data"].get("content", "")
+
+                        # Persist round result for multi-turn context
+                        task_lock.conversation_history.append({
+                            "task_content": req.message,
+                            "task_result": content,
+                            "working_directory": task_lock.working_directory,
+                        })
 
                         await add_message(
                             db, req.conversation_id, "assistant", content
