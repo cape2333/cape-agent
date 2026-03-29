@@ -2,6 +2,9 @@ import asyncio
 import logging
 from uuid import uuid4
 
+from typing import List
+
+from camel.agents import ChatAgent
 from camel.societies.workforce import Workforce
 from camel.societies.workforce.workforce_callback import WorkforceCallback
 from camel.societies.workforce.events import (
@@ -15,7 +18,7 @@ from camel.societies.workforce.events import (
     WorkerCreatedEvent,
     WorkerDeletedEvent,
 )
-from camel.societies.workforce.utils import TaskAnalysisResult
+from camel.societies.workforce.utils import TaskAnalysisResult, TaskAssignResult
 from camel.tasks import Task
 
 from app.models.enums import Status
@@ -42,6 +45,7 @@ class CapeWorkforceCallback(WorkforceCallback):
         self.task_lock = task_lock
         self._loop = asyncio.get_event_loop()
         self._subtask_results: dict[str, dict] = {}  # task_id -> {content, result}
+        self._workforce: "CapeWorkforce | None" = None  # set by CapeWorkforce.__init__
 
     def _emit(self, step: str, data: dict):
         asyncio.run_coroutine_threadsafe(
@@ -53,29 +57,27 @@ class CapeWorkforceCallback(WorkforceCallback):
         pass
 
     def log_task_decomposed(self, event: TaskDecomposedEvent) -> None:
+        sub_tasks = []
+        for tid in event.subtask_ids:
+            content = tid  # fallback to ID
+            if self._workforce:
+                for t in self._workforce._pending_tasks:
+                    if t.id == tid:
+                        content = t.content
+                        break
+            sub_tasks.append({"id": tid, "content": content, "state": "open"})
         self._emit("decompose_progress", {
-            "sub_tasks": [
-                {"id": tid, "content": tid, "state": "open"}
-                for tid in event.subtask_ids
-            ],
+            "sub_tasks": sub_tasks,
             "is_final": True,
         })
 
     def log_task_assigned(self, event: TaskAssignedEvent) -> None:
-        self._emit("assign_task", {
-            "task_id": event.task_id,
-            "assignee_id": event.worker_id,
-            "content": "",
-            "state": "waiting",
-        })
+        # No-op: handled by CapeWorkforce._find_assignee() with richer data
+        pass
 
     def log_task_started(self, event: TaskStartedEvent) -> None:
-        self._emit("assign_task", {
-            "task_id": event.task_id,
-            "assignee_id": event.worker_id,
-            "content": "",
-            "state": "running",
-        })
+        # No-op: handled by CapeWorkforce._post_task() with richer data
+        pass
 
     def log_task_completed(self, event: TaskCompletedEvent) -> None:
         result_text = event.result_summary or ""
@@ -126,8 +128,84 @@ class CapeWorkforce(Workforce):
         callback = CapeWorkforceCallback(task_lock)
         super().__init__(callbacks=[callback], **kwargs)
         self.task_lock = task_lock
+        self._worker_map: dict[str, str] = {}  # node_id -> description
+        callback._workforce = self
 
     _ANALYZE_MAX_RETRIES = 3
+
+    # ------------------------------------------------------------------
+    # Worker registration: build node_id → description mapping
+    # ------------------------------------------------------------------
+
+    def add_single_agent_worker(
+        self,
+        description: str,
+        worker: ChatAgent,
+        **kwargs,
+    ) -> "CapeWorkforce":
+        result = super().add_single_agent_worker(
+            description=description, worker=worker, **kwargs,
+        )
+        # The newly added worker is the last child
+        new_child = self._children[-1]
+        self._worker_map[str(new_child.node_id)] = description
+        return result
+
+    # ------------------------------------------------------------------
+    # Assignment: override to emit rich events with task content,
+    # human-readable agent description, and dependency info.
+    # ------------------------------------------------------------------
+
+    async def _emit_event(self, step: str, data: dict):
+        await self.task_lock.put_event(step, data)
+
+    async def _find_assignee(self, tasks: List[Task]) -> TaskAssignResult:
+        assigned = await super()._find_assignee(tasks)
+
+        task_lookup = {t.id: t for t in tasks}
+
+        for item in assigned.assignments:
+            # Skip main task
+            if self._task and item.task_id == self._task.id:
+                continue
+            # Skip retry/replan (already assigned)
+            task_obj = task_lookup.get(item.task_id)
+            if task_obj and task_obj.assigned_worker_id:
+                logger.debug(
+                    f"[WF] Skipping duplicate assign notification for "
+                    f"{item.task_id} (already assigned)"
+                )
+                continue
+
+            description = self._worker_map.get(
+                str(item.assignee_id), "unknown"
+            )
+            content = task_obj.content if task_obj else ""
+
+            await self._emit_event("assign_task", {
+                "task_id": item.task_id,
+                "assignee_id": description,
+                "content": content,
+                "state": "waiting",
+                "dependencies": item.dependencies,
+            })
+
+        return assigned
+
+    async def _post_task(self, task: Task, assignee_id: str) -> None:
+        # Notify frontend that dependencies are met and task is running
+        if not (self._task and task.id == self._task.id):
+            description = self._worker_map.get(
+                str(assignee_id), "unknown"
+            )
+            await self._emit_event("assign_task", {
+                "task_id": task.id,
+                "assignee_id": description,
+                "content": task.content,
+                "state": "running",
+                "dependencies": [],
+            })
+        await super()._post_task(task, assignee_id)
 
     def _analyze_task(
         self,

@@ -297,7 +297,12 @@ export const useStore = create<AppState>((set) => ({
                 status: 'executing',
                 subTasks: ts3.subTasks.map(t =>
                   t.id === data.task_id
-                    ? { ...t, state: data.state as SubTask['state'], assigneeId: data.assignee_id as string }
+                    ? {
+                        ...t,
+                        state: data.state as SubTask['state'],
+                        assigneeId: data.assignee_id as string,
+                        dependencies: (data.dependencies as string[]) || t.dependencies,
+                      }
                     : t
                 ),
               },
