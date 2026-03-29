@@ -42,6 +42,7 @@ export interface SubTask {
   state: 'open' | 'waiting' | 'running' | 'done' | 'failed';
   assigneeId?: string;
   result?: string;
+  dependencies?: string[];
 }
 
 export interface AgentActivity {
