@@ -13,6 +13,7 @@ class TaskLock:
     workforce: Optional[object] = None
     working_directory: str = ""
     background_tasks: set = field(default_factory=set)
+    conversation_history: list = field(default_factory=list)
 
     async def put_event(self, step: str, data: dict):
         await self.queue.put({"step": step, "data": data})
