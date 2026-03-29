@@ -79,7 +79,7 @@ def create_developer_agent(
         working_directory=working_directory,
         safe_mode=True,
         clone_current_env=True,
-        timeout=30.0,
+        timeout=300.0,
     )
     tools = terminal_toolkit.get_tools()
 

@@ -100,7 +100,6 @@ def create_browser_agent(
         ),
         tools=tools,
         model=model,
-        message_window_size=6,
         enable_snapshot_clean=True,
         prune_tool_calls_from_memory=True,
     )
