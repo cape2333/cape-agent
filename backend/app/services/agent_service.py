@@ -451,11 +451,27 @@ async def build_workforce(
         model=model,
     )
 
+    # Template agent for workers created dynamically at runtime (e.g. when
+    # CAMEL's failure-handling strategy creates a new specialised worker).
+    # Without this, CAMEL falls back to its default model which lacks the
+    # user's API key / base URL, causing 401 errors.
+    new_worker_agent = ChatAgent(
+        system_message=(
+            f"You are a helpful assistant.\n"
+            f"- System: {env_vars['platform_system']} "
+            f"({env_vars['platform_machine']})\n"
+            f"- Working directory: `{working_dir}`. Use absolute paths.\n"
+            f"- Current date: {env_vars['now_str']}\n"
+        ),
+        model=model,
+    )
+
     workforce = CapeWorkforce(
         task_lock=task_lock,
         description="Cape Agent Workforce with browser, developer, and document agents",
         coordinator_agent=coordinator,
         task_agent=task_agent,
+        new_worker_agent=new_worker_agent,
     )
 
     # Auto-connect browser if not already connected
@@ -467,8 +483,9 @@ async def build_workforce(
             logger.warning(f"Browser auto-connect failed: {e}")
 
     if browser_service.connected:
-        # Browser agent needs its own model with parallel_tool_calls disabled
-        # to avoid concurrent browser actions that corrupt page state.
+        # Disable parallel tool calls to prevent concurrent browser actions
+        # that corrupt page state. CAMEL 0.2.90a6+ strips this param from
+        # requests with no tools, so _context_summary_agent won't 400.
         browser_model = build_model(
             provider, model_name, api_key, api_base, stream=False,
             extra_config={"parallel_tool_calls": False},

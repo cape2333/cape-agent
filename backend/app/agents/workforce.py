@@ -8,10 +8,12 @@ from camel.agents import ChatAgent
 from camel.societies.workforce import Workforce
 from camel.societies.workforce.workforce_callback import WorkforceCallback
 from camel.societies.workforce.events import (
+    LogEvent,
     TaskCreatedEvent,
     TaskDecomposedEvent,
     TaskAssignedEvent,
     TaskStartedEvent,
+    TaskUpdatedEvent,
     TaskCompletedEvent,
     TaskFailedEvent,
     AllTasksCompletedEvent,
@@ -53,6 +55,9 @@ class CapeWorkforceCallback(WorkforceCallback):
             self._loop,
         )
 
+    def log_message(self, event: LogEvent) -> None:
+        logger.debug(f"[WF] {event.level}: {event.message}")
+
     def log_task_created(self, event: TaskCreatedEvent) -> None:
         pass
 
@@ -78,6 +83,11 @@ class CapeWorkforceCallback(WorkforceCallback):
     def log_task_started(self, event: TaskStartedEvent) -> None:
         # No-op: handled by CapeWorkforce._post_task() with richer data
         pass
+
+    def log_task_updated(self, event: TaskUpdatedEvent) -> None:
+        logger.debug(
+            f"[WF] Task {event.task_id} updated: {event.update_type}"
+        )
 
     def log_task_completed(self, event: TaskCompletedEvent) -> None:
         result_text = event.result_summary or ""
