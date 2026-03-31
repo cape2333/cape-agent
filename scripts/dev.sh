@@ -8,9 +8,18 @@ PORT_FILE="$PROJECT_DIR/.backend_port"
 # Clean up stale port file
 rm -f "$PORT_FILE"
 
+# Setup backend virtual environment if needed
+cd "$PROJECT_DIR/backend"
+if [ ! -d ".venv" ]; then
+  echo "Creating virtual environment..."
+  uv venv
+  echo "Installing dependencies..."
+  uv pip install -e "."
+fi
+
 # Start backend in background
 echo "Starting backend..."
-cd "$PROJECT_DIR/backend"
+source .venv/bin/activate
 CAPE_AGENT_RELOAD=1 python3 main.py &
 BACKEND_PID=$!
 
