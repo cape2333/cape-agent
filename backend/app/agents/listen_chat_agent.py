@@ -18,7 +18,7 @@ class ListenChatAgent(ChatAgent):
         task_lock: TaskLock,
         agent_name: str,
         tool_execution_timeout: float | None = None,
-        step_timeout: float | None = 600,
+        step_timeout: float | None = 1800,
         **kwargs,
     ):
         super().__init__(
@@ -129,8 +129,9 @@ class ListenChatAgent(ChatAgent):
         cloned.agent_name = self.agent_name
         cloned.agent_id = self.agent_id
         cloned.process_task_id = self.process_task_id
-        # CAMEL-AI's clone() doesn't propagate enable_snapshot_clean
+        # CAMEL-AI's clone() doesn't propagate these attributes
         cloned._enable_snapshot_clean = self._enable_snapshot_clean
+        cloned.step_timeout = self.step_timeout
         return cloned
 
     def _resolve_toolkit_name(self, tool_name: str) -> str:
