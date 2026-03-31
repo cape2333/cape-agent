@@ -64,8 +64,8 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
             task_lock.background_tasks = set()
 
         try:
-            # Classify question
-            model = build_model(provider, model_name, req.api_key, req.api_base)
+            # Classify question (non-streaming for reliable JSON parsing)
+            model = build_model(provider, model_name, req.api_key, req.api_base, stream=False)
             classifier = create_classifier_agent(model)
             classification = await classify_question(
                 classifier, req.message, history
@@ -120,7 +120,7 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
 
                     try:
                         event = await asyncio.wait_for(
-                            task_lock.get_event(), timeout=300
+                            task_lock.get_event(), timeout=1800
                         )
                     except asyncio.TimeoutError:
                         yield sse_json("error", {

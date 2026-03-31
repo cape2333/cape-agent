@@ -51,12 +51,7 @@ async def classify_question(
         response = await agent.astep(message)
         content = ""
 
-        # Handle streaming response (when model has stream=True)
-        if hasattr(response, "__aiter__"):
-            async for partial in response:
-                if partial.msg:
-                    content = partial.msg.content or ""
-        elif hasattr(response, "msg") and response.msg:
+        if hasattr(response, "msg") and response.msg:
             content = response.msg.content or ""
         elif hasattr(response, "msgs") and response.msgs:
             content = response.msgs[0].content or ""
