@@ -7,6 +7,7 @@ from camel.toolkits import (
     FileToolkit,
     PPTXToolkit,
 )
+from camel.toolkits.terminal_toolkit import TerminalToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.task_lock import TaskLock
@@ -80,6 +81,9 @@ must occur here. Use absolute paths for all file system operations.
     - Export to CSV: `export_sheet_to_csv`.
     - Extract content: `extract_excel_content`.
 
+- **Terminal Access** (via `shell_exec`):
+    - Run shell commands to install dependencies, download files, or
+      perform file operations that go beyond what `write_to_file` supports.
 </capabilities>
 
 <document_creation_workflow>
@@ -105,10 +109,17 @@ def create_document_agent(
     )
     excel_toolkit = ExcelToolkit()
     pptx_toolkit = PPTXToolkit()
+    terminal_toolkit = TerminalToolkit(
+        working_directory=working_directory,
+        safe_mode=True,
+        clone_current_env=True,
+        timeout=120.0,
+    )
     tools = (
         file_toolkit.get_tools()
         + excel_toolkit.get_tools()
         + pptx_toolkit.get_tools()
+        + terminal_toolkit.get_tools()
     )
 
     system_message = DOCUMENT_SYSTEM_PROMPT.format(
