@@ -2,6 +2,7 @@ import platform
 from datetime import datetime
 
 from camel.messages import BaseMessage
+from camel.toolkits.terminal_toolkit import TerminalToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.browser_service import browser_service
@@ -54,6 +55,9 @@ must occur here. Use absolute paths for all file system operations.
 - Use the browser toolset to visit, navigate, and interact with websites.
 - Navigate to search engines (google.com, bing.com, duckduckgo.com) to
   search for information.
+- Use the terminal (shell_exec) to save research results to files in the
+  working directory. For example, use `echo '...' > file.txt` or
+  `python3 -c "import json; ..."` to write structured data.
 </capabilities>
 
 <web_search_workflow>
@@ -83,6 +87,16 @@ def create_browser_agent(
     task_lock: TaskLock, model, working_directory: str = ""
 ) -> ListenChatAgent:
     tools = browser_service.get_tools()
+
+    # Add terminal toolkit so the browser agent can save research results
+    # to files (e.g., JSON, text summaries) in the working directory.
+    terminal_toolkit = TerminalToolkit(
+        working_directory=working_directory,
+        safe_mode=True,
+        clone_current_env=True,
+        timeout=120.0,
+    )
+    tools = tools + terminal_toolkit.get_tools()
 
     system_message = BROWSER_SYSTEM_PROMPT.format(
         platform_system=platform.system(),

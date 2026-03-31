@@ -64,6 +64,7 @@ htmlcov/
 
 # === Runtime ===
 .backend_port
+backend/context_files/
 
 # === Claude Code ===
 .claude/

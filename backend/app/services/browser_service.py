@@ -10,6 +10,22 @@ from camel.toolkits import FunctionTool
 logger = logging.getLogger(__name__)
 
 
+def _ws_is_dead(ws_wrapper) -> bool:
+    """Check if a WebSocket wrapper's connection is dead."""
+    if ws_wrapper is None:
+        return False  # No wrapper = nothing to check
+    if ws_wrapper.websocket is None:
+        return True
+    # Also check websockets library state if available
+    try:
+        import websockets.protocol
+        if ws_wrapper.websocket.state != websockets.protocol.State.OPEN:
+            return True
+    except (ImportError, AttributeError):
+        pass
+    return False
+
+
 class BrowserService:
     """Manages HybridBrowserToolkit with its own stealth browser instance."""
 
@@ -107,6 +123,28 @@ class BrowserService:
             stealth=True,
             user_data_dir=profile_dir,
         )
+
+        # Patch _ensure_ws_wrapper to auto-reconnect dead WebSockets.
+        # CAMEL's original only creates a wrapper when _ws_wrapper is None,
+        # but after a disconnect the wrapper object persists with a dead
+        # websocket — so reconnection never happens. Our patch detects this
+        # and cleans up before letting the original recreate the connection.
+        _original_ensure_ws = self._toolkit._ensure_ws_wrapper
+
+        async def _ensure_ws_with_reconnect():
+            ws = self._toolkit._ws_wrapper
+            if _ws_is_dead(ws):
+                logger.info(
+                    "Dead WebSocket detected, reconnecting..."
+                )
+                try:
+                    await ws.stop()
+                except Exception as e:
+                    logger.warning(f"Error stopping dead wrapper: {e}")
+                self._toolkit._ws_wrapper = None
+            await _original_ensure_ws()
+
+        self._toolkit._ensure_ws_wrapper = _ensure_ws_with_reconnect
 
         # Eagerly initialize so tools are available immediately
         await self._toolkit._ensure_ws_wrapper()
