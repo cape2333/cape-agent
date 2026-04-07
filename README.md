@@ -108,46 +108,61 @@ You can enter API keys directly in the Settings modal — they are stored locall
 
 ```
 cape-agent/
-├── backend/                  # Python FastAPI backend
-│   ├── main.py               # Entry point, dynamic port allocation
-│   ├── pyproject.toml        # Python dependencies
+├── backend/                          # Python FastAPI backend
+│   ├── main.py                       # Entry point, dynamic port allocation
+│   ├── pyproject.toml                # Python dependencies
+│   ├── tests/                        # Pytest suite
 │   └── app/
-│       ├── api/              # REST + SSE endpoints
-│       │   ├── chat.py       # Streaming chat (SSE)
+│       ├── api/                      # REST + SSE endpoints
+│       │   ├── chat.py               # Streaming chat (SSE)
 │       │   ├── conversations.py
-│       │   ├── browser.py    # Browser control via CDP
+│       │   ├── browser.py            # Browser control via CDP
 │       │   └── settings.py
-│       ├── agents/           # Multi-agent workforce
-│       │   ├── workforce.py  # Coordinator + task decomposition
-│       │   └── factory.py    # Agent factory (browser, developer, document)
-│       ├── services/         # Business logic
+│       ├── agents/                   # Multi-agent workforce
+│       │   ├── workforce.py          # Coordinator + task decomposition
+│       │   ├── single_agent_worker.py
+│       │   ├── listen_chat_agent.py  # Streaming chat agent wrapper
+│       │   └── factory/              # Agent factories
+│       │       ├── browser.py
+│       │       ├── developer.py
+│       │       ├── document.py
+│       │       └── classifier.py
+│       ├── services/                 # Business logic
 │       │   ├── agent_service.py
 │       │   ├── browser_service.py
-│       │   └── conversation_service.py
-│       └── models/           # DB + Pydantic schemas
-├── frontend/                 # Electron + React + Vite
+│       │   ├── conversation_service.py
+│       │   └── task_lock.py
+│       └── models/                   # DB + Pydantic schemas
+│           ├── database.py
+│           ├── enums.py
+│           └── schemas.py
+├── frontend/                         # Electron + React + Vite
 │   ├── src/
-│   │   ├── main/             # Electron main process
-│   │   │   ├── index.ts      # Window + BrowserPanelManager
-│   │   │   └── preload.ts    # IPC bridge
-│   │   └── renderer/         # React app
-│   │       ├── components/   # UI components
-│   │       ├── stores/       # Zustand state
-│   │       ├── services/     # API client (HTTP + SSE)
-│   │       └── hooks/        # React hooks
+│   │   ├── main/                     # Electron main process
+│   │   │   ├── index.ts              # Window + BrowserPanelManager
+│   │   │   ├── preload.ts            # IPC bridge
+│   │   │   └── python-manager.ts     # Bundled backend launcher
+│   │   └── renderer/                 # React app
+│   │       ├── components/           # UI components (chat, layout, settings)
+│   │       ├── stores/               # Zustand state
+│   │       ├── services/             # API client (HTTP + SSE)
+│   │       ├── hooks/                # React hooks
+│   │       └── types/                # Shared TypeScript types
+│   ├── forge.config.ts               # Electron Forge config
 │   └── package.json
 ├── scripts/
-│   └── dev.sh                # Dev orchestration script
-└── package.json              # Root scripts (npm run dev)
+│   └── dev.sh                        # Dev orchestration script
+├── docs/                             # Design docs and plans
+└── package.json                      # Root scripts (npm run dev)
 ```
 
 ## Tech Stack
 
-- **Frontend**: Electron 33, React 18, TypeScript, Vite, Tailwind CSS, Zustand
-- **Backend**: FastAPI, Uvicorn, CAMEL-AI, SQLite (aiosqlite)
+- **Frontend**: Electron 33, React 18, TypeScript 5, Vite 6, Tailwind CSS 4, Zustand
+- **Backend**: FastAPI, Uvicorn, [CAMEL-AI](https://github.com/camel-ai/camel) 0.2.90a6, SQLite (aiosqlite)
 - **Communication**: REST API + Server-Sent Events (SSE)
 - **Browser Automation**: Chrome DevTools Protocol (CDP)
-- **Build**: Electron Forge
+- **Build**: Electron Forge 7
 
 ## Packaging
 
