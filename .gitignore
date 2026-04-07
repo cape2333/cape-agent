@@ -65,6 +65,7 @@ htmlcov/
 # === Runtime ===
 .backend_port
 backend/context_files/
+backend/camel_working_dir/
 
 # === Claude Code ===
 .claude/

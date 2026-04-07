@@ -22,6 +22,7 @@ Built with **Electron + React** on the frontend and **FastAPI + [CAMEL-AI](https
 | **Python** | >= 3.10 |
 | **Node.js** | >= 18 |
 | **npm** | >= 9 |
+| **uv** (recommended) | latest |
 
 ## Quick Start
 
@@ -34,12 +35,27 @@ cd cape-agent
 
 ### 2. Install backend dependencies
 
+Using `uv` (recommended — much faster):
+
 ```bash
 cd backend
+uv venv
+source .venv/bin/activate
+uv pip install -e .
+```
+
+Or with plain `pip`:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e .
 ```
 
 > The backend uses [CAMEL-AI](https://github.com/camel-ai/camel) which has many optional deps. If you only need certain providers you can install a lighter subset, but `pip install -e .` will get everything working.
+>
+> **Tip:** If you skip this step, `npm run dev` will auto-create the `.venv` and install dependencies on first run via `scripts/dev.sh`.
 
 ### 3. Install frontend dependencies
 

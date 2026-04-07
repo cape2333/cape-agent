@@ -1,3 +1,4 @@
+import logging
 import socket
 import os
 from contextlib import asynccontextmanager
@@ -12,6 +13,11 @@ from app.api.conversations import router as conversations_router
 from app.api.chat import router as chat_router
 from app.api.settings import router as settings_router
 from app.api.browser import router as browser_router
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 
 
 @asynccontextmanager
