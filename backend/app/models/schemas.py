@@ -60,6 +60,12 @@ class AppSettings(BaseModel):
     active_provider_index: int = 0
 
 
+class HumanReplyRequest(BaseModel):
+    conversation_id: str
+    agent_name: str
+    response: str
+
+
 import json
 
 

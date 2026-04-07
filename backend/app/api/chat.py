@@ -9,7 +9,7 @@ import aiosqlite
 
 from app.models.database import get_db
 from app.models.enums import Status
-from app.models.schemas import ChatRequest, sse_json
+from app.models.schemas import ChatRequest, HumanReplyRequest, sse_json
 from app.services.conversation_service import (
     get_messages,
     add_message,
@@ -62,6 +62,7 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
             task_lock.status = Status.classifying
             task_lock.queue = asyncio.Queue()
             task_lock.background_tasks = set()
+            task_lock.human_input = {}
 
         try:
             # Classify question (non-streaming for reliable JSON parsing)
@@ -186,3 +187,15 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
             await task_lock.cleanup()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/human-reply")
+async def human_reply(req: HumanReplyRequest):
+    """Deliver the user's reply to a waiting agent's ask_human call."""
+    task_lock = _active_task_locks.get(req.conversation_id)
+    if not task_lock:
+        raise HTTPException(status_code=404, detail="No active task for this conversation")
+    if req.agent_name not in task_lock.human_input:
+        raise HTTPException(status_code=400, detail="No pending question from this agent")
+    await task_lock.put_human_input(req.agent_name, req.response)
+    return {"ok": True}

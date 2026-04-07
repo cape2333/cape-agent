@@ -14,6 +14,19 @@ class TaskLock:
     working_directory: str = ""
     background_tasks: set = field(default_factory=set)
     conversation_history: list = field(default_factory=list)
+    human_input: dict = field(default_factory=dict)
+
+    def add_human_input_listener(self, agent_name: str):
+        """Register a per-agent asyncio.Queue for human replies."""
+        self.human_input[agent_name] = asyncio.Queue(maxsize=1)
+
+    async def get_human_input(self, agent_name: str) -> str:
+        """Block until the user replies to this agent's question."""
+        return await self.human_input[agent_name].get()
+
+    async def put_human_input(self, agent_name: str, response: str):
+        """Deliver the user's reply to the waiting agent."""
+        await self.human_input[agent_name].put(response)
 
     async def put_event(self, step: str, data: dict):
         await self.queue.put({"step": step, "data": data})
@@ -31,3 +44,10 @@ class TaskLock:
                 self.queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
+        for q in self.human_input.values():
+            while not q.empty():
+                try:
+                    q.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+        self.human_input.clear()
