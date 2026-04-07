@@ -15,12 +15,11 @@ class SearchToolkit:
     """Picks Google or DuckDuckGo based on environment variables.
 
     The agent never sees both — exactly one search tool is registered,
-    decided at agent-creation time.
+    decided when ``get_can_use_tools()`` is called.
     """
 
     @classmethod
     def get_can_use_tools(cls) -> list[FunctionTool]:
-        camel = CamelSearchToolkit()
         if os.getenv("GOOGLE_API_KEY") and os.getenv("SEARCH_ENGINE_ID"):
-            return [FunctionTool(camel.search_google)]
-        return [FunctionTool(camel.search_duckduckgo)]
+            return [FunctionTool(CamelSearchToolkit().search_google)]
+        return [FunctionTool(CamelSearchToolkit().search_duckduckgo)]

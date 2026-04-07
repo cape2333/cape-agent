@@ -3,6 +3,11 @@
 from app.toolkits.search_toolkit import SearchToolkit
 
 
+# The assertions below check FunctionTool.get_function_name() rather than
+# comparing bound-method identity. CAMEL builds the function name from
+# func.__name__ at schema-build time, so this is exactly the name the
+# LLM will see in its tool list. The trade-off is that this test would
+# need updating if CAMEL ever renames `search_google` / `search_duckduckgo`.
 class TestGetCanUseTools:
     def test_returns_google_when_both_keys_set(self, monkeypatch):
         monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
