@@ -3,6 +3,7 @@ from datetime import datetime
 
 from camel.messages import BaseMessage
 from app.toolkits.terminal_toolkit import TerminalToolkit
+from app.toolkits.search_toolkit import SearchToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.browser_service import browser_service
@@ -39,10 +40,14 @@ must occur here. Use absolute paths for all file system operations.
 - NEVER try to extract or return raw HTML. Only extract text content.
     Keep summaries concise — focus on key points, not full page dumps.
 
-- URL POLICY: You may navigate to well-known search engines (google.com,
-    bing.com, duckduckgo.com) and URLs provided by the user. For all other
-    URLs, only use links found on webpages you have visited through the
-    browser. Do NOT invent or guess specific article/page URLs.
+- CRITICAL URL POLICY: You are STRICTLY FORBIDDEN from inventing URLs.
+    You MUST only use URLs from one of these sources:
+      1. URLs returned by search tools (`search_google` /
+         `search_duckduckgo`)
+      2. URLs found on webpages you have visited via browser tools
+      3. URLs explicitly provided by the user
+    You MUST NOT navigate to search engine homepages (google.com,
+    bing.com, duckduckgo.com) — use the search tools instead.
 
 - You MUST NOT answer from your own knowledge. All information MUST be
     sourced from the web using the available tools.
@@ -52,33 +57,40 @@ must occur here. Use absolute paths for all file system operations.
 </mandatory_instructions>
 
 <capabilities>
-- Use the browser toolset to visit, navigate, and interact with websites.
-- Navigate to search engines (google.com, bing.com, duckduckgo.com) to
-  search for information.
+- Use the search tool (`search_google` or `search_duckduckgo`) to find
+  information on the web.
+- Use the browser toolset to visit, navigate, and interact with specific
+  webpages returned by the search tool.
 - Use the terminal (shell_exec) to save research results to files in the
   working directory. For example, use `echo '...' > file.txt` or
   `python3 -c "import json; ..."` to write structured data.
 </capabilities>
 
 <web_search_workflow>
-You perform ALL web searches by navigating the browser directly to search
-engines. Follow this workflow:
+You have a dedicated search tool — USE IT FIRST. The browser is for
+reading specific pages, not for typing queries into search boxes.
 
-1. Use `browser_visit_page("https://www.bing.com")` to open Bing
-   (or duckduckgo.com as alternative; avoid Google — it often blocks
-   automated access).
-2. Use `browser_type` to enter your search query into the search box,
-   then `browser_enter` to submit.
-3. Use `browser_get_page_snapshot` to read the search results.
-4. Click on promising result links with `browser_click`.
-5. Use `browser_get_page_snapshot` to read page content. The output can
-   be very large — focus on extracting only the relevant parts.
-6. Interact with pages using `browser_click`, `browser_type`,
-   `browser_select`, `browser_enter` as needed.
+Standard workflow:
+1. Call `search_google` (or `search_duckduckgo` — only one will be
+   available depending on configuration) with a focused query. Returns
+   a list of {title, url, description} results.
+2. Pick 1–3 promising results and call `browser_visit_page(url)` to
+   read the full content.
+3. Use `browser_get_page_snapshot` to extract the relevant text. The
+   output can be very large — focus on extracting only the relevant
+   parts.
+4. If a page requires interaction (login, click-to-expand, form), use
+   `browser_click` / `browser_type` / `browser_select` / `browser_enter`.
+5. If you need follow-up information, refine the query and call the
+   search tool again — do NOT navigate to a search engine homepage.
+
+**Fallback:** only if the search tool returns no useful results AND you
+cannot form a better query, you may use `browser_visit_page` against
+duckduckgo.com as a last resort.
 
 **When encountering verification challenges** (login, CAPTCHAs, robot
-checks), note the issue and move on to alternative search engines or
-sources.
+checks), note the issue and pivot to a different result from your
+search results.
 </web_search_workflow>
 """
 
@@ -96,6 +108,12 @@ def create_browser_agent(
         clone_current_env=True,
     )
     tools = tools + terminal_toolkit.get_tools()
+
+    # Add a real search tool. Picks Google Custom Search when both
+    # GOOGLE_API_KEY and SEARCH_ENGINE_ID are configured, otherwise
+    # falls back to DuckDuckGo (zero-config). Exactly one search tool
+    # is registered.
+    tools = tools + SearchToolkit.get_can_use_tools()
 
     system_message = BROWSER_SYSTEM_PROMPT.format(
         platform_system=platform.system(),
