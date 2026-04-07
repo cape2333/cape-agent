@@ -3,6 +3,7 @@ from datetime import datetime
 
 from camel.messages import BaseMessage
 from app.toolkits.terminal_toolkit import TerminalToolkit
+from app.toolkits.search_toolkit import SearchToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.browser_service import browser_service
@@ -96,6 +97,12 @@ def create_browser_agent(
         clone_current_env=True,
     )
     tools = tools + terminal_toolkit.get_tools()
+
+    # Add a real search tool. Picks Google Custom Search when both
+    # GOOGLE_API_KEY and SEARCH_ENGINE_ID are configured, otherwise
+    # falls back to DuckDuckGo (zero-config). Exactly one search tool
+    # is registered.
+    tools = tools + SearchToolkit.get_can_use_tools()
 
     system_message = BROWSER_SYSTEM_PROMPT.format(
         platform_system=platform.system(),
