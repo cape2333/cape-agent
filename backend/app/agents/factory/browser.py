@@ -4,6 +4,7 @@ from datetime import datetime
 from camel.messages import BaseMessage
 from app.toolkits.terminal_toolkit import TerminalToolkit
 from app.toolkits.search_toolkit import SearchToolkit
+from app.toolkits.human_toolkit import HumanToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.browser_service import browser_service
@@ -64,6 +65,8 @@ must occur here. Use absolute paths for all file system operations.
 - Use the terminal (shell_exec) to save research results to files in the
   working directory. For example, use `echo '...' > file.txt` or
   `python3 -c "import json; ..."` to write structured data.
+- Use `ask_human` to ask the user a question when you need clarification,
+  confirmation, or additional information to proceed.
 </capabilities>
 
 <web_search_workflow>
@@ -88,9 +91,10 @@ Standard workflow:
 cannot form a better query, you may use `browser_visit_page` against
 duckduckgo.com as a last resort.
 
-**When encountering verification challenges** (login, CAPTCHAs, robot
-checks), note the issue and pivot to a different result from your
-search results.
+**When encountering verification challenges** (login, CAPTCHAs, QR code
+scans, robot checks, or any action requiring manual user interaction in
+the browser), you MUST use `ask_human` to request the user's help and
+wait for their confirmation before continuing.
 </web_search_workflow>
 """
 
@@ -114,6 +118,10 @@ def create_browser_agent(
     # falls back to DuckDuckGo (zero-config). Exactly one search tool
     # is registered.
     tools = tools + SearchToolkit.get_can_use_tools()
+
+    # Human-in-the-loop: let the agent ask the user for clarification
+    human_toolkit = HumanToolkit(task_lock, "Browser Agent")
+    tools = tools + human_toolkit.get_tools()
 
     system_message = BROWSER_SYSTEM_PROMPT.format(
         platform_system=platform.system(),

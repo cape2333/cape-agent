@@ -3,6 +3,7 @@ from datetime import datetime
 
 from camel.messages import BaseMessage
 from app.toolkits.terminal_toolkit import TerminalToolkit
+from app.toolkits.human_toolkit import HumanToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.task_lock import TaskLock
@@ -50,6 +51,8 @@ must occur here. Use absolute paths for all file system operations.
   - **Networking**: `curl`, `wget` for web requests
 - **Solution Verification**: Immediately test and verify your solutions
   by executing them in the terminal.
+- Use `ask_human` to ask the user a question when you need clarification,
+  confirmation, or additional information to proceed.
 </capabilities>
 
 <philosophy>
@@ -80,7 +83,8 @@ def create_developer_agent(
         safe_mode=True,
         clone_current_env=True,
     )
-    tools = terminal_toolkit.get_tools()
+    human_toolkit = HumanToolkit(task_lock, "Developer Agent")
+    tools = terminal_toolkit.get_tools() + human_toolkit.get_tools()
 
     system_message = DEVELOPER_SYSTEM_PROMPT.format(
         platform_system=platform.system(),

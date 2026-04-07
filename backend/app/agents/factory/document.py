@@ -8,6 +8,7 @@ from camel.toolkits import (
     PPTXToolkit,
 )
 from app.toolkits.terminal_toolkit import TerminalToolkit
+from app.toolkits.human_toolkit import HumanToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.task_lock import TaskLock
@@ -84,6 +85,8 @@ must occur here. Use absolute paths for all file system operations.
 - **Terminal Access** (via `shell_exec`):
     - Run shell commands to install dependencies, download files, or
       perform file operations that go beyond what `write_to_file` supports.
+- Use `ask_human` to ask the user a question when you need clarification,
+  confirmation, or additional information to proceed.
 </capabilities>
 
 <document_creation_workflow>
@@ -114,11 +117,13 @@ def create_document_agent(
         safe_mode=True,
         clone_current_env=True,
     )
+    human_toolkit = HumanToolkit(task_lock, "Document Agent")
     tools = (
         file_toolkit.get_tools()
         + excel_toolkit.get_tools()
         + pptx_toolkit.get_tools()
         + terminal_toolkit.get_tools()
+        + human_toolkit.get_tools()
     )
 
     system_message = DOCUMENT_SYSTEM_PROMPT.format(
