@@ -2,7 +2,7 @@ import platform
 from datetime import datetime
 
 from camel.messages import BaseMessage
-from camel.toolkits.terminal_toolkit import TerminalToolkit
+from app.toolkits.terminal_toolkit import TerminalToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.task_lock import TaskLock
@@ -79,7 +79,6 @@ def create_developer_agent(
         working_directory=working_directory,
         safe_mode=True,
         clone_current_env=True,
-        timeout=1800.0,
     )
     tools = terminal_toolkit.get_tools()
 

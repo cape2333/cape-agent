@@ -7,7 +7,7 @@ from camel.toolkits import (
     FileToolkit,
     PPTXToolkit,
 )
-from camel.toolkits.terminal_toolkit import TerminalToolkit
+from app.toolkits.terminal_toolkit import TerminalToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.task_lock import TaskLock
@@ -113,7 +113,6 @@ def create_document_agent(
         working_directory=working_directory,
         safe_mode=True,
         clone_current_env=True,
-        timeout=120.0,
     )
     tools = (
         file_toolkit.get_tools()
