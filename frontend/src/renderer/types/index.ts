@@ -62,12 +62,19 @@ export interface AgentLog {
   timestamp: string;
 }
 
+export interface PendingAsk {
+  agentName: string;
+  question: string;
+  timestamp: string;
+}
+
 export interface TaskStateInfo {
   status: 'idle' | 'classifying' | 'decomposing' | 'executing' | 'done';
   subTasks: SubTask[];
   activeAgents: AgentActivity[];
   agentLogs: AgentLog[];
   streamingDecomposeText: string;
+  pendingAsk?: PendingAsk | null;
 }
 
 // Agent step represents one tool call cycle

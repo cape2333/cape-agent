@@ -5,7 +5,7 @@ import MessageBubble from "../chat/MessageBubble";
 import StreamingMessage from "../chat/StreamingMessage";
 
 const ChatArea: React.FC = () => {
-  const { messages, isStreaming, streamingContent, agentSteps, taskState } = useChat();
+  const { messages, isStreaming, streamingContent, agentSteps, taskState, pendingAsk, replyToAsk } = useChat();
   const activeConversationId = useStore((s) => s.activeConversationId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const justSwitchedRef = useRef(false);
@@ -70,6 +70,8 @@ const ChatArea: React.FC = () => {
             content={streamingContent}
             agentSteps={agentSteps}
             taskState={taskState}
+            pendingAsk={pendingAsk}
+            onReplyToAsk={replyToAsk}
           />
         )}
         <div ref={bottomRef} />

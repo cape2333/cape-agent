@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Conversation, Message, AppSettings, AgentStep, SSEEvent, TaskStateInfo, SubTask, AgentActivity, AgentLog } from "../types";
+import type { Conversation, Message, AppSettings, AgentStep, SSEEvent, TaskStateInfo, SubTask, AgentActivity, AgentLog, PendingAsk } from "../types";
 
 interface AppState {
   // Conversations
@@ -43,6 +43,7 @@ interface AppState {
   taskStates: Record<string, TaskStateInfo>;
   handleSSEEvent: (conversationId: string, event: SSEEvent) => void;
   resetTaskState: (conversationId: string) => void;
+  clearPendingAsk: (conversationId: string) => void;
 }
 
 function sortConversations(conversations: Conversation[]): Conversation[] {
@@ -175,9 +176,22 @@ export const useStore = create<AppState>((set) => ({
           activeAgents: [],
           agentLogs: [],
           streamingDecomposeText: '',
+          pendingAsk: null,
         },
       },
     })),
+
+  clearPendingAsk: (conversationId) =>
+    set((s) => {
+      const ts = s.taskStates[conversationId];
+      if (!ts) return {};
+      return {
+        taskStates: {
+          ...s.taskStates,
+          [conversationId]: { ...ts, pendingAsk: null },
+        },
+      };
+    }),
 
   handleSSEEvent: (conversationId, event) =>
     set((s) => {
@@ -452,6 +466,25 @@ export const useStore = create<AppState>((set) => ({
               [conversationId]: {
                 ...(s.taskStates[conversationId] || { subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '' }),
                 status: 'done',
+              },
+            },
+          };
+        }
+
+        case 'ask': {
+          const tsAsk = s.taskStates[conversationId] || {
+            status: 'executing', subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '', pendingAsk: null,
+          };
+          return {
+            taskStates: {
+              ...s.taskStates,
+              [conversationId]: {
+                ...tsAsk,
+                pendingAsk: {
+                  agentName: data.agent_name as string,
+                  question: data.question as string,
+                  timestamp: new Date().toISOString(),
+                },
               },
             },
           };

@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import MarkdownContent from "./MarkdownContent";
 import { Loader2, CheckCircle, XCircle, Globe, Brain, ChevronDown, ChevronRight, User, Bot } from "lucide-react";
-import type { AgentStep, AgentLog, TaskStateInfo } from "../../types";
+import type { AgentStep, AgentLog, TaskStateInfo, PendingAsk } from "../../types";
 import TaskProgress from "./TaskProgress";
+import AskBubble from "./AskBubble";
 
 interface Props {
   content: string;
   agentSteps?: AgentStep[];
   taskState?: TaskStateInfo | null;
+  pendingAsk?: PendingAsk | null;
+  onReplyToAsk?: (response: string) => void;
 }
 
 const AgentStepItem: React.FC<{ step: AgentStep }> = ({ step }) => {
@@ -154,7 +157,7 @@ const AgentLogItem: React.FC<{ log: AgentLog; steps: AgentStep[] }> = ({ log, st
   );
 };
 
-const StreamingMessage: React.FC<Props> = ({ content, agentSteps, taskState }) => {
+const StreamingMessage: React.FC<Props> = ({ content, agentSteps, taskState, pendingAsk, onReplyToAsk }) => {
   const hasSteps = agentSteps && agentSteps.length > 0;
   const isWorkforceMode = taskState && taskState.status !== "idle";
   const isDecomposing = taskState?.status === "decomposing";
@@ -214,6 +217,17 @@ const StreamingMessage: React.FC<Props> = ({ content, agentSteps, taskState }) =
                 />
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Human-in-the-loop: agent asking the user a question */}
+        {pendingAsk && onReplyToAsk && (
+          <div className="mb-2 pb-2 border-b border-warm-200/40">
+            <AskBubble
+              agentName={pendingAsk.agentName}
+              question={pendingAsk.question}
+              onReply={onReplyToAsk}
+            />
           </div>
         )}
 

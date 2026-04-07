@@ -17,6 +17,7 @@ export function useChat() {
     handleSSEEvent,
     resetTaskState,
     taskStates,
+    clearPendingAsk,
   } = useStore();
 
   const streamState = activeConversationId
@@ -32,6 +33,8 @@ export function useChat() {
   const currentTaskState = activeConversationId
     ? taskStates[activeConversationId] || null
     : null;
+
+  const pendingAsk = currentTaskState?.pendingAsk ?? null;
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -76,6 +79,19 @@ export function useChat() {
     ]
   );
 
+  const replyToAsk = useCallback(
+    async (response: string) => {
+      if (!activeConversationId || !pendingAsk) return;
+      clearPendingAsk(activeConversationId);
+      await api.sendHumanReply(
+        activeConversationId,
+        pendingAsk.agentName,
+        response,
+      );
+    },
+    [activeConversationId, pendingAsk, clearPendingAsk]
+  );
+
   return {
     messages,
     isStreaming,
@@ -83,5 +99,7 @@ export function useChat() {
     sendMessage,
     agentSteps: currentSteps,
     taskState: currentTaskState,
+    pendingAsk,
+    replyToAsk,
   };
 }

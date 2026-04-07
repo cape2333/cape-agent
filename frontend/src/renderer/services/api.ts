@@ -140,3 +140,22 @@ export async function sendChatMessage(
     }
   }
 }
+
+// --- Human-in-the-loop ---
+
+export async function sendHumanReply(
+  conversationId: string,
+  agentName: string,
+  response: string,
+): Promise<void> {
+  await ensureApiUrl();
+  await fetch(`${BASE_URL}/api/human-reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      agent_name: agentName,
+      response,
+    }),
+  });
+}
