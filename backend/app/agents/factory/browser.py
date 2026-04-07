@@ -73,7 +73,7 @@ reading specific pages, not for typing queries into search boxes.
 Standard workflow:
 1. Call `search_google` (or `search_duckduckgo` — only one will be
    available depending on configuration) with a focused query. Returns
-   a list of {title, url, description} results.
+   a list of {{title, url, description}} results.
 2. Pick 1–3 promising results and call `browser_visit_page(url)` to
    read the full content.
 3. Use `browser_get_page_snapshot` to extract the relevant text. The

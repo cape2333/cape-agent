@@ -469,6 +469,7 @@ async def build_workforce(
         coordinator_agent=coordinator,
         task_agent=task_agent,
         new_worker_agent=new_worker_agent,
+        task_timeout_seconds=1800.0,  # 30 min; default 600s too short for heavy browsing
     )
 
     # Auto-connect browser if not already connected
