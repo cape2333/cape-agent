@@ -230,6 +230,18 @@ def _make_message(role: str, content: str) -> BaseMessage:
     )
 
 
+def _is_openai_reasoning_model(model_name: str) -> bool:
+    """OpenAI reasoning models (o-series, gpt-5) reject the
+    ``temperature`` parameter — they only support the default value."""
+    name = str(model_name).lower()
+    return (
+        name.startswith("o1")
+        or name.startswith("o3")
+        or name.startswith("o4")
+        or name.startswith("gpt-5")
+    )
+
+
 def build_model(
     provider: str,
     model_name: str,
@@ -247,7 +259,9 @@ def build_model(
     if api_base:
         kwargs["url"] = api_base
 
-    config = {"stream": stream, "temperature": 0.7}
+    config: dict = {"stream": stream}
+    if not _is_openai_reasoning_model(model_name):
+        config["temperature"] = 0.7
     if extra_config:
         config.update(extra_config)
 
@@ -356,10 +370,13 @@ async def summarize_workforce_result(
             model_kwargs["api_key"] = api_key
         if api_base:
             model_kwargs["url"] = api_base
+        summary_config: dict = {"stream": False}
+        if not _is_openai_reasoning_model(model_name):
+            summary_config["temperature"] = 0.7
         summary_model = ModelFactory.create(
             model_platform=platform,
             model_type=model_name,
-            model_config_dict={"stream": False, "temperature": 0.7},
+            model_config_dict=summary_config,
             **model_kwargs,
         )
         summary_agent = ChatAgent(
