@@ -1,0 +1,241 @@
+# Cape Agent Evaluation Cases
+#
+# Each case is tagged with a `capability` dimension so reports can
+# aggregate pass rate per capability and reveal which parts of the
+# pipeline need work.  Add new cases by copying the structure — no
+# Python needed.
+#
+# Capabilities:
+#   classification            — does the router pick simple vs workforce
+#   task_decomposition        — can the decomposer split a goal into subtasks
+#   browser_agent             — single-agent web research quality
+#   developer_agent           — single-agent code writing / execution
+#   document_agent            — single-agent file / doc generation
+#   multi_agent_coordination  — requires 2+ agents working together
+#   simple_qa                 — simple path should NOT engage workforce
+
+# ============================================================
+# classification (tests the router)
+# ============================================================
+
+- id: "cls_simple_math"
+  description: "Arithmetic must stay on simple path"
+  capability: "classification"
+  difficulty: "easy"
+  input: "What is 15 * 23?"
+  expected:
+    classification: "simple"
+    answer_contains: ["345"]
+
+- id: "cls_simple_greeting"
+  description: "Greeting must stay on simple path"
+  capability: "classification"
+  difficulty: "easy"
+  input: "Hello, how are you?"
+  expected:
+    classification: "simple"
+
+- id: "cls_simple_explanation"
+  description: "Concept explanation stays on simple path"
+  capability: "classification"
+  difficulty: "easy"
+  input: "Explain what a Python decorator is in 2 sentences."
+  expected:
+    classification: "simple"
+    answer_contains: ["decorator"]
+
+- id: "cls_complex_research"
+  description: "Research tasks must route to workforce"
+  capability: "classification"
+  difficulty: "easy"
+  input: "Search the web for the latest release of Python and write a summary to release.md"
+  expected:
+    classification: "complex"
+
+- id: "cls_complex_code"
+  description: "Code generation tasks must route to workforce"
+  capability: "classification"
+  difficulty: "easy"
+  input: "Create a file fibonacci.py that computes the first 20 Fibonacci numbers"
+  expected:
+    classification: "complex"
+
+# ============================================================
+# developer_agent (code generation + execution)
+# ============================================================
+
+- id: "dev_snake_game"
+  description: "Generate a playable Snake game"
+  capability: "developer_agent"
+  difficulty: "medium"
+  input: "Write a Snake game in Python using pygame, save as snake_game.py"
+  expected:
+    classification: "complex"
+    agents_used: ["developer"]
+    files: ["snake_game.py"]
+    python_syntax_valid: true
+    code_must_import: ["pygame"]
+    code_must_contain: ["while", "event"]
+    ast_has_loop: true
+    ast_min_functions: 2
+    quality_rubric: |
+      1. Has snake movement with keyboard controls
+      2. Has food spawning and eating mechanics
+      3. Has collision detection (wall and/or self)
+      4. Has score tracking or visual feedback
+
+- id: "dev_todo_api"
+  description: "Build a REST API with CRUD endpoints"
+  capability: "developer_agent"
+  difficulty: "medium"
+  input: "Build a simple TODO REST API with FastAPI that supports CRUD operations, save as todo_api.py"
+  expected:
+    classification: "complex"
+    agents_used: ["developer"]
+    files: ["todo_api.py"]
+    python_syntax_valid: true
+    code_must_import: ["fastapi"]
+    code_must_contain: ["get", "post", "delete"]
+    ast_min_functions: 3
+    quality_rubric: |
+      1. Has GET endpoint to list todos
+      2. Has POST endpoint to create a todo
+      3. Has DELETE or PUT endpoint
+      4. Uses proper FastAPI patterns (router, models)
+
+- id: "dev_simple_script"
+  description: "Simple script — fibonacci generator"
+  capability: "developer_agent"
+  difficulty: "easy"
+  input: "Write a Python script that prints the first 20 Fibonacci numbers, save as fib.py"
+  expected:
+    classification: "complex"
+    agents_used: ["developer"]
+    files: ["fib.py"]
+    python_syntax_valid: true
+    code_must_contain: ["fib"]
+
+- id: "dev_data_analysis"
+  description: "Data generation + analysis"
+  capability: "developer_agent"
+  difficulty: "medium"
+  input: "Write a Python script that generates 50 random sales records (date, product, amount), analyzes the data (totals by product), and saves an HTML report to report.html"
+  expected:
+    classification: "complex"
+    agents_used: ["developer"]
+    files: ["report.html"]
+    file_not_empty: ["report.html"]
+    file_min_size:
+      report.html: 200
+
+# ============================================================
+# browser_agent (web research)
+# ============================================================
+
+- id: "br_framework_comparison"
+  description: "Research top Python web frameworks"
+  capability: "browser_agent"
+  difficulty: "medium"
+  input: "Search for the top 3 Python web frameworks in 2024 and write a comparison report to comparison.md"
+  expected:
+    classification: "complex"
+    agents_used: ["browser", "document"]
+    files: ["comparison.md"]
+    file_not_empty: ["comparison.md"]
+    file_min_size:
+      comparison.md: 500
+    code_must_contain: ["Django", "FastAPI"]
+    quality_rubric: |
+      1. Covers at least 3 Python web frameworks
+      2. Has comparison dimensions (performance, ecosystem, learning curve)
+      3. Well-structured markdown with headings and sections
+
+- id: "br_technology_summary"
+  description: "Summarize a specific technology"
+  capability: "browser_agent"
+  difficulty: "easy"
+  input: "Research what Rust's ownership model is and write a 2-paragraph summary to rust_ownership.md"
+  expected:
+    classification: "complex"
+    agents_used: ["browser", "document"]
+    files: ["rust_ownership.md"]
+    file_not_empty: ["rust_ownership.md"]
+    code_must_contain: ["ownership", "Rust"]
+
+# ============================================================
+# document_agent (content generation)
+# ============================================================
+
+- id: "doc_markdown_blog"
+  description: "Write a technical blog post"
+  capability: "document_agent"
+  difficulty: "easy"
+  input: "Write a 300-word technical blog post about asyncio in Python, save as blog.md"
+  expected:
+    classification: "complex"
+    agents_used: ["document"]
+    files: ["blog.md"]
+    file_not_empty: ["blog.md"]
+    file_min_size:
+      blog.md: 500
+    code_must_contain: ["async", "await"]
+
+- id: "doc_structured_note"
+  description: "Structured note generation"
+  capability: "document_agent"
+  difficulty: "easy"
+  input: "Create a structured markdown cheat sheet about git commands (add, commit, push, pull, branch) saved as git_cheatsheet.md"
+  expected:
+    classification: "complex"
+    agents_used: ["document"]
+    files: ["git_cheatsheet.md"]
+    file_not_empty: ["git_cheatsheet.md"]
+    code_must_contain: ["git add", "git commit", "git push"]
+
+# ============================================================
+# multi_agent_coordination (requires 2+ agents cooperating)
+# ============================================================
+
+- id: "mac_research_then_write"
+  description: "Browser finds info, document writes it up"
+  capability: "multi_agent_coordination"
+  difficulty: "medium"
+  input: "Research the differences between REST and GraphQL APIs, then create a markdown cheat sheet saved as api_cheatsheet.md"
+  expected:
+    classification: "complex"
+    agents_used: ["browser", "document"]
+    files: ["api_cheatsheet.md"]
+    file_not_empty: ["api_cheatsheet.md"]
+    code_must_contain: ["REST", "GraphQL"]
+    quality_rubric: |
+      1. Covers key differences (query style, over-fetching, schema)
+      2. Cheat-sheet format (concise, scannable)
+      3. Accurate technical content
+
+- id: "mac_research_then_code"
+  description: "Browser finds API info, developer uses it in code"
+  capability: "multi_agent_coordination"
+  difficulty: "hard"
+  input: "Research the current weather API format from a free weather service, then write a Python script weather.py that fetches and prints weather for Tokyo. Save both a notes.md explaining your findings and weather.py."
+  expected:
+    classification: "complex"
+    agents_used: ["browser", "developer"]
+    files: ["weather.py", "notes.md"]
+    python_syntax_valid: true
+    file_not_empty: ["weather.py", "notes.md"]
+
+- id: "mac_three_agent"
+  description: "All three agents must collaborate"
+  capability: "multi_agent_coordination"
+  difficulty: "hard"
+  input: "Research the top 3 Python ORMs, write a comparison blog post to orm_blog.md, and also write a Python example script orm_example.py demonstrating basic usage of the most popular one."
+  expected:
+    classification: "complex"
+    agents_used: ["browser", "developer", "document"]
+    files: ["orm_blog.md", "orm_example.py"]
+    python_syntax_valid: true
+    file_not_empty: ["orm_blog.md", "orm_example.py"]
+    quality_rubric: |
+      1. Blog covers at least 3 ORMs with comparison
+      2. Code example is runnable and demonstrates ORM usage
+      3. Both deliverables align (the code uses the ORM the blog recommends)
