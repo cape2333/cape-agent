@@ -66,6 +66,12 @@ htmlcov/
 .backend_port
 backend/context_files/
 backend/camel_working_dir/
+backend/build/
+backend/evals/reports/
+backend/evals/baselines/
+
+# === Evaluation docs (local only) ===
+backend/evals/README.md
 
 # === Claude Code ===
 .claude/
