@@ -37,7 +37,7 @@ class SkillService:
                 "numbers, hyphens, dots, underscores. Max 64 chars."
             )
 
-    def _find_skill_dir(self, name: str) -> Path | None:
+    def find_skill_dir(self, name: str) -> Path | None:
         for agent_type in AGENT_TYPES:
             candidate = self._dir / agent_type / name
             if (candidate / "SKILL.md").exists():
@@ -61,7 +61,7 @@ class SkillService:
             fm = {}
         return (fm if isinstance(fm, dict) else {}), body
 
-    def _parse_skill_md_from_text(self, text: str) -> tuple[dict, str]:
+    def parse_skill_md_from_text(self, text: str) -> tuple[dict, str]:
         """Parse a raw SKILL.md string into (frontmatter_dict, body).
 
         Same logic as _parse_skill_md but accepts text instead of a Path.
@@ -164,7 +164,7 @@ class SkillService:
         created_by: str = "user",
     ) -> SkillMeta:
         self._validate_name(name)
-        if self._find_skill_dir(name):
+        if self.find_skill_dir(name):
             raise ValueError(f"Skill '{name}' already exists.")
         if len(description) > MAX_DESC_LEN:
             raise ValueError(f"Description exceeds {MAX_DESC_LEN} chars.")
@@ -227,7 +227,7 @@ class SkillService:
         return skills
 
     def get_skill(self, name: str) -> SkillDetail | None:
-        skill_dir = self._find_skill_dir(name)
+        skill_dir = self.find_skill_dir(name)
         if not skill_dir:
             return None
         md_path = skill_dir / "SKILL.md"
@@ -248,7 +248,7 @@ class SkillService:
         tags: list[str] | None = None,
         enabled: bool | None = None,
     ) -> SkillDetail:
-        skill_dir = self._find_skill_dir(name)
+        skill_dir = self.find_skill_dir(name)
         if not skill_dir:
             raise ValueError(f"Skill '{name}' not found.")
         md_path = skill_dir / "SKILL.md"
@@ -279,7 +279,7 @@ class SkillService:
         )
 
     def delete_skill(self, name: str) -> None:
-        skill_dir = self._find_skill_dir(name)
+        skill_dir = self.find_skill_dir(name)
         if not skill_dir:
             raise ValueError(f"Skill '{name}' not found.")
         shutil.rmtree(skill_dir)

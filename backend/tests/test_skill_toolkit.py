@@ -41,6 +41,18 @@ class TestSkillView:
         result = toolkit.skill_view("nope")
         assert "not found" in result.lower()
 
+    def test_view_supporting_file(self, toolkit, services):
+        svc, _, _ = services
+        svc.create_skill(
+            name="with-refs", description="d", agent_type="browser",
+            content="body", created_by="user",
+        )
+        skill_dir = svc.find_skill_dir("with-refs")
+        (skill_dir / "references").mkdir()
+        (skill_dir / "references" / "api.md").write_text("# API notes")
+        result = toolkit.skill_view("with-refs", file_path="references/api.md")
+        assert result == "# API notes"
+
 
 class TestSkillManage:
     def test_create_via_manage(self, toolkit, services):
@@ -51,6 +63,34 @@ class TestSkillManage:
         )
         assert "created" in result.lower() or "success" in result.lower()
         assert svc.get_skill("new-one") is not None
+
+    def test_edit_via_manage(self, toolkit, services):
+        svc, _, _ = services
+        svc.create_skill(
+            name="to-edit", description="old", agent_type="browser",
+            content="old body", created_by="user",
+        )
+        result = toolkit.skill_manage(
+            action="edit", name="to-edit",
+            content="---\nname: to-edit\ndescription: new\nagent_type: browser\nversion: 1\nenabled: true\ncreated_by: user\ncreated_at: ''\nupdated_at: ''\ntags: []\n---\n\nnew body",
+        )
+        assert "updated" in result.lower()
+        detail = svc.get_skill("to-edit")
+        assert detail.content.strip() == "new body"
+        assert detail.description == "new"
+
+    def test_patch_old_string_not_found(self, toolkit, services):
+        svc, _, _ = services
+        svc.create_skill(
+            name="patchable", description="d", agent_type="browser",
+            content="hello world", created_by="user",
+        )
+        result = toolkit.skill_manage(
+            action="patch", name="patchable",
+            old_string="missing", new_string="replaced",
+        )
+        assert "not found" in result.lower()
+        assert svc.get_skill("patchable").content.strip() == "hello world"
 
     def test_delete_via_manage(self, toolkit, services):
         svc, _, _ = services

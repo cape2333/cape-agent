@@ -48,7 +48,7 @@ class SkillToolkit:
         )
 
         if file_path:
-            skill_dir = self._svc._find_skill_dir(name)
+            skill_dir = self._svc.find_skill_dir(name)
             if skill_dir:
                 target = skill_dir / file_path
                 if target.is_file():
@@ -84,7 +84,7 @@ class SkillToolkit:
             if action == "create":
                 if not content:
                     return "Error: content is required for 'create'."
-                fm, body = self._svc._parse_skill_md_from_text(content)
+                fm, body = self._svc.parse_skill_md_from_text(content)
                 result = self._svc.create_skill(
                     name=fm.get("name", name),
                     description=fm.get("description", ""),
@@ -105,9 +105,9 @@ class SkillToolkit:
                 detail = self._svc.get_skill(name)
                 if not detail:
                     return f"Skill '{name}' not found."
-                new_content = detail.content.replace(old_string, new_string, 1)
-                if new_content == detail.content:
+                if old_string not in detail.content:
                     return f"old_string not found in skill '{name}'."
+                new_content = detail.content.replace(old_string, new_string, 1)
                 result = self._svc.update_skill(name, content=new_content)
                 self._logger.log_event(
                     "skill_patched", name, result.agent_type,
@@ -118,7 +118,7 @@ class SkillToolkit:
             elif action == "edit":
                 if not content:
                     return "Error: content is required for 'edit'."
-                fm, body = self._svc._parse_skill_md_from_text(content)
+                fm, body = self._svc.parse_skill_md_from_text(content)
                 result = self._svc.update_skill(
                     name,
                     description=fm.get("description"),
