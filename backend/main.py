@@ -13,6 +13,7 @@ from app.api.conversations import router as conversations_router
 from app.api.chat import router as chat_router
 from app.api.settings import router as settings_router
 from app.api.browser import router as browser_router
+from app.api.skills import router as skills_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +41,7 @@ app.include_router(conversations_router)
 app.include_router(chat_router)
 app.include_router(settings_router)
 app.include_router(browser_router)
+app.include_router(skills_router)
 
 
 @app.get("/health")
