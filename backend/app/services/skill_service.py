@@ -287,7 +287,7 @@ class SkillService:
 
     def build_skill_prompt_block(self, agent_type: str) -> str:
         """Build the system prompt skill index block for an agent type."""
-        skills = [s for s in self.list_skills(agent_type=agent_type) if s.enabled]
+        skills = self.list_skills(agent_type=agent_type, enabled=True)
         if not skills:
             return ""
         lines = []
