@@ -73,6 +73,9 @@ backend/evals/baselines/
 # === Evaluation docs (local only) ===
 backend/evals/README.md
 
+# === Local-only architecture notes ===
+docs/skill-system.md
+
 # === Claude Code ===
 .claude/
 
