@@ -153,3 +153,33 @@ class TestSnapshot:
         snapshot_path.write_text(json.dumps(data))
         result = svc.list_skills()
         assert result[0].description == "from-cache"
+
+
+class TestResolveSkillFile:
+    @pytest.fixture
+    def svc_with_skill(self, svc):
+        svc.create_skill(
+            name="sk", description="d", agent_type="browser",
+            content="body", created_by="user",
+        )
+        skill_dir = svc.find_skill_dir("sk")
+        (skill_dir / "references").mkdir()
+        (skill_dir / "references" / "api.md").write_text("# API")
+        return svc
+
+    def test_returns_valid_path(self, svc_with_skill):
+        target = svc_with_skill.resolve_skill_file("sk", "references/api.md")
+        assert target is not None and target.is_file()
+
+    def test_rejects_parent_traversal(self, svc_with_skill):
+        assert svc_with_skill.resolve_skill_file("sk", "../../../etc/passwd") is None
+        assert svc_with_skill.resolve_skill_file("sk", "references/../../../etc/passwd") is None
+
+    def test_rejects_absolute_path(self, svc_with_skill):
+        assert svc_with_skill.resolve_skill_file("sk", "/etc/passwd") is None
+
+    def test_rejects_skill_md_itself(self, svc_with_skill):
+        assert svc_with_skill.resolve_skill_file("sk", "SKILL.md") is None
+
+    def test_unknown_skill_returns_none(self, svc):
+        assert svc.resolve_skill_file("nope", "anything.md") is None

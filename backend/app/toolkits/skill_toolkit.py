@@ -61,12 +61,12 @@ class SkillToolkit:
                 pass
 
         if file_path:
-            skill_dir = self._svc.find_skill_dir(name)
-            if skill_dir:
-                target = skill_dir / file_path
-                if target.is_file():
-                    return target.read_text(encoding="utf-8")
-                return f"File '{file_path}' not found in skill '{name}'. Available: {detail.files}"
+            target = self._svc.resolve_skill_file(name, file_path)
+            if target is None:
+                return f"Invalid file path '{file_path}' for skill '{name}'."
+            if target.is_file():
+                return target.read_text(encoding="utf-8")
+            return f"File '{file_path}' not found in skill '{name}'. Available: {detail.files}"
 
         return detail.content
 

@@ -44,6 +44,29 @@ class SkillService:
                 return candidate
         return None
 
+    def resolve_skill_file(self, name: str, file_path: str) -> Path | None:
+        """Safely resolve a supporting-file path inside a skill.
+
+        Returns the resolved Path only if it stays inside the skill's
+        directory after normalization. Returns None if the skill does not
+        exist, the path escapes via "..", or the path is otherwise invalid.
+        SKILL.md itself is also excluded — the metadata file is edited
+        through update_skill, not the files API.
+        """
+        skill_dir = self.find_skill_dir(name)
+        if not skill_dir:
+            return None
+        try:
+            skill_dir_resolved = skill_dir.resolve()
+            target = (skill_dir / file_path).resolve()
+        except (OSError, RuntimeError, ValueError):
+            return None
+        if not target.is_relative_to(skill_dir_resolved):
+            return None
+        if target == skill_dir_resolved / "SKILL.md":
+            return None
+        return target
+
     def _parse_skill_md(self, path: Path) -> tuple[dict, str]:
         text = path.read_text(encoding="utf-8")
         if not text.startswith("---"):

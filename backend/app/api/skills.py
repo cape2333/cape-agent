@@ -133,10 +133,11 @@ async def list_skill_files(name: str):
 
 @router.get("/{name}/files/{file_path:path}")
 async def read_skill_file(name: str, file_path: str):
-    skill_dir = skill_service.find_skill_dir(name)
-    if not skill_dir:
+    if not skill_service.find_skill_dir(name):
         raise HTTPException(status_code=404, detail=f"Skill '{name}' not found")
-    target = skill_dir / file_path
+    target = skill_service.resolve_skill_file(name, file_path)
+    if target is None:
+        raise HTTPException(status_code=400, detail=f"Invalid file path '{file_path}'")
     if not target.is_file():
         raise HTTPException(status_code=404, detail=f"File '{file_path}' not found")
     return {"content": target.read_text(encoding="utf-8")}
@@ -144,10 +145,11 @@ async def read_skill_file(name: str, file_path: str):
 
 @router.put("/{name}/files/{file_path:path}")
 async def write_skill_file(name: str, file_path: str, body: dict):
-    skill_dir = skill_service.find_skill_dir(name)
-    if not skill_dir:
+    if not skill_service.find_skill_dir(name):
         raise HTTPException(status_code=404, detail=f"Skill '{name}' not found")
-    target = skill_dir / file_path
+    target = skill_service.resolve_skill_file(name, file_path)
+    if target is None:
+        raise HTTPException(status_code=400, detail=f"Invalid file path '{file_path}'")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(body.get("content", ""), encoding="utf-8")
     return {"ok": True}
@@ -155,10 +157,11 @@ async def write_skill_file(name: str, file_path: str, body: dict):
 
 @router.delete("/{name}/files/{file_path:path}")
 async def delete_skill_file(name: str, file_path: str):
-    skill_dir = skill_service.find_skill_dir(name)
-    if not skill_dir:
+    if not skill_service.find_skill_dir(name):
         raise HTTPException(status_code=404, detail=f"Skill '{name}' not found")
-    target = skill_dir / file_path
+    target = skill_service.resolve_skill_file(name, file_path)
+    if target is None:
+        raise HTTPException(status_code=400, detail=f"Invalid file path '{file_path}'")
     if not target.is_file():
         raise HTTPException(status_code=404, detail=f"File '{file_path}' not found")
     target.unlink()
