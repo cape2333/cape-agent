@@ -61,6 +61,24 @@ class SkillService:
             fm = {}
         return (fm if isinstance(fm, dict) else {}), body
 
+    def _parse_skill_md_from_text(self, text: str) -> tuple[dict, str]:
+        """Parse a raw SKILL.md string into (frontmatter_dict, body).
+
+        Same logic as _parse_skill_md but accepts text instead of a Path.
+        """
+        if not text.startswith("---"):
+            return {}, text
+        end = re.search(r"\n---\s*\n", text[3:])
+        if not end:
+            return {}, text
+        yaml_str = text[3 : end.start() + 3]
+        body = text[end.end() + 3 :]
+        try:
+            fm = yaml.safe_load(yaml_str)
+        except yaml.YAMLError:
+            fm = {}
+        return (fm if isinstance(fm, dict) else {}), body
+
     def _build_skill_md(self, fm: dict, body: str) -> str:
         yaml_str = yaml.dump(
             fm, default_flow_style=False, allow_unicode=True, sort_keys=False
