@@ -5,9 +5,12 @@ from camel.messages import BaseMessage
 from app.toolkits.terminal_toolkit import TerminalToolkit
 from app.toolkits.search_toolkit import SearchToolkit
 from app.toolkits.human_toolkit import HumanToolkit
+from app.toolkits.skill_toolkit import SkillToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
 from app.services.browser_service import browser_service
+from app.services.skill_service import skill_service
+from app.services.skill_logger import skill_logger
 from app.services.task_lock import TaskLock
 
 BROWSER_SYSTEM_PROMPT = """\
@@ -100,7 +103,7 @@ wait for their confirmation before continuing.
 
 
 def create_browser_agent(
-    task_lock: TaskLock, model, working_directory: str = ""
+    task_lock: TaskLock, model, working_directory: str = "", conversation_id: str = ""
 ) -> ListenChatAgent:
     tools = browser_service.get_tools()
 
@@ -123,12 +126,22 @@ def create_browser_agent(
     human_toolkit = HumanToolkit(task_lock, "Browser Agent")
     tools = tools + human_toolkit.get_tools()
 
+    # Skill toolkit: lets the agent view, manage, and record skill insights
+    skill_toolkit = SkillToolkit(
+        agent_type="browser",
+        skill_service=skill_service,
+        skill_logger=skill_logger,
+        conversation_id=conversation_id,
+    )
+    tools = tools + skill_toolkit.get_tools()
+
+    skill_block = skill_service.build_skill_prompt_block("browser")
     system_message = BROWSER_SYSTEM_PROMPT.format(
         platform_system=platform.system(),
         platform_machine=platform.machine(),
         working_directory=working_directory,
         now_str=datetime.now().strftime("%Y-%m-%d %H:%M"),
-    )
+    ) + skill_block
 
     return ListenChatAgent(
         task_lock=task_lock,

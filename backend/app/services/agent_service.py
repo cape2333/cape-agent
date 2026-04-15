@@ -505,19 +505,19 @@ async def build_workforce(
             provider, model_name, api_key, api_base, stream=False,
             extra_config={"parallel_tool_calls": False},
         )
-        browser_agent = create_browser_agent(task_lock, browser_model, working_dir)
+        browser_agent = create_browser_agent(task_lock, browser_model, working_dir, conversation_id=task_lock.id)
         workforce.add_single_agent_worker(
             description="Web research, browsing, and information gathering",
             worker=browser_agent,
         )
 
-    developer_agent = create_developer_agent(task_lock, model, working_dir)
+    developer_agent = create_developer_agent(task_lock, model, working_dir, conversation_id=task_lock.id)
     workforce.add_single_agent_worker(
         description="Code writing, execution, and technical implementation",
         worker=developer_agent,
     )
 
-    document_agent = create_document_agent(task_lock, model, working_dir)
+    document_agent = create_document_agent(task_lock, model, working_dir, conversation_id=task_lock.id)
     workforce.add_single_agent_worker(
         description="Document creation, file management, and content writing",
         worker=document_agent,

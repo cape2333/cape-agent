@@ -284,3 +284,32 @@ class SkillService:
             raise ValueError(f"Skill '{name}' not found.")
         shutil.rmtree(skill_dir)
         self._invalidate_snapshot()
+
+    def build_skill_prompt_block(self, agent_type: str) -> str:
+        """Build the system prompt skill index block for an agent type."""
+        skills = [s for s in self.list_skills(agent_type=agent_type) if s.enabled]
+        if not skills:
+            return ""
+        lines = []
+        for s in skills:
+            lines.append(f"- {s.name}: {s.description}")
+        index = "\n".join(lines)
+        return (
+            "\n\n## Available Skills\n\n"
+            "Before executing your task, scan the skills below. If any skill matches\n"
+            "your current task, load it with skill_view(name) and follow its instructions.\n\n"
+            f"<available_skills>\n{index}\n</available_skills>\n\n"
+            "If a skill you used was wrong or incomplete, update it with skill_manage.\n"
+            "After completing a difficult task (3+ tool calls with retries),\n"
+            "consider saving the approach as a new skill.\n\n"
+            "When you encounter these situations during task execution:\n"
+            "- A retry with a different approach succeeded\n"
+            "- You discovered a pitfall or workaround\n"
+            "- An existing skill's instructions were wrong or incomplete\n\n"
+            "Call mark_insight() to record what you learned.\n"
+            "Do NOT stop to create a full skill — just record the observation and continue your task."
+        )
+
+
+# Module-level singleton
+skill_service = SkillService()

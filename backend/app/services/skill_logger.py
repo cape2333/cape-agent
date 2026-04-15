@@ -128,3 +128,7 @@ class SkillLogger:
             for line in remaining:
                 f.write(line + "\n")
             fcntl.flock(f, fcntl.LOCK_UN)
+
+
+# Module-level singleton
+skill_logger = SkillLogger()

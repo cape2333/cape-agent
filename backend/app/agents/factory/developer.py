@@ -4,8 +4,11 @@ from datetime import datetime
 from camel.messages import BaseMessage
 from app.toolkits.terminal_toolkit import TerminalToolkit
 from app.toolkits.human_toolkit import HumanToolkit
+from app.toolkits.skill_toolkit import SkillToolkit
 
 from app.agents.listen_chat_agent import ListenChatAgent
+from app.services.skill_service import skill_service
+from app.services.skill_logger import skill_logger
 from app.services.task_lock import TaskLock
 
 DEVELOPER_SYSTEM_PROMPT = """\
@@ -76,7 +79,7 @@ must occur here. Use absolute paths for all file system operations.
 
 
 def create_developer_agent(
-    task_lock: TaskLock, model, working_directory: str
+    task_lock: TaskLock, model, working_directory: str, conversation_id: str = ""
 ) -> ListenChatAgent:
     terminal_toolkit = TerminalToolkit(
         working_directory=working_directory,
@@ -86,12 +89,22 @@ def create_developer_agent(
     human_toolkit = HumanToolkit(task_lock, "Developer Agent")
     tools = terminal_toolkit.get_tools() + human_toolkit.get_tools()
 
+    # Skill toolkit: lets the agent view, manage, and record skill insights
+    skill_toolkit = SkillToolkit(
+        agent_type="developer",
+        skill_service=skill_service,
+        skill_logger=skill_logger,
+        conversation_id=conversation_id,
+    )
+    tools = tools + skill_toolkit.get_tools()
+
+    skill_block = skill_service.build_skill_prompt_block("developer")
     system_message = DEVELOPER_SYSTEM_PROMPT.format(
         platform_system=platform.system(),
         platform_machine=platform.machine(),
         working_directory=working_directory,
         now_str=datetime.now().strftime("%Y-%m-%d %H:%M"),
-    )
+    ) + skill_block
 
     return ListenChatAgent(
         task_lock=task_lock,
