@@ -1,4 +1,4 @@
-import type { Conversation, Message, AppSettings, ChatRequest, SSEEvent } from "../types";
+import type { Conversation, Message, AppSettings, ChatRequest, SSEEvent, SkillMeta, SkillDetail, SkillCreate, SkillUpdate, SkillStats } from "../types";
 
 let BASE_URL = "http://127.0.0.1:8001"; // overridden by initApiUrl()
 let apiUrlPromise: Promise<string> | null = null;
@@ -158,4 +158,60 @@ export async function sendHumanReply(
       response,
     }),
   });
+}
+
+// --- Skills ---
+
+export async function fetchSkills(agentType?: string): Promise<SkillMeta[]> {
+  await ensureApiUrl();
+  const params = agentType ? `?agent_type=${agentType}` : "";
+  const res = await fetch(`${BASE_URL}/api/skills${params}`);
+  return res.json();
+}
+
+export async function fetchSkillDetail(name: string): Promise<SkillDetail> {
+  await ensureApiUrl();
+  const res = await fetch(`${BASE_URL}/api/skills/${name}`);
+  if (!res.ok) throw new Error(`Skill '${name}' not found`);
+  return res.json();
+}
+
+export async function createSkill(data: SkillCreate): Promise<SkillMeta> {
+  await ensureApiUrl();
+  const res = await fetch(`${BASE_URL}/api/skills`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "Failed to create skill");
+  }
+  return res.json();
+}
+
+export async function updateSkill(name: string, data: SkillUpdate): Promise<SkillMeta> {
+  await ensureApiUrl();
+  const res = await fetch(`${BASE_URL}/api/skills/${name}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "Failed to update skill");
+  }
+  return res.json();
+}
+
+export async function deleteSkill(name: string): Promise<void> {
+  await ensureApiUrl();
+  const res = await fetch(`${BASE_URL}/api/skills/${name}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete skill");
+}
+
+export async function fetchSkillStats(): Promise<SkillStats[]> {
+  await ensureApiUrl();
+  const res = await fetch(`${BASE_URL}/api/skills/stats`);
+  return res.json();
 }

@@ -93,6 +93,48 @@ export interface SSEEvent {
   data: Record<string, unknown>;
 }
 
+// --- Skills ---
+
+export interface SkillMeta {
+  name: string;
+  description: string;
+  agent_type: "browser" | "developer" | "document";
+  version: number;
+  enabled: boolean;
+  created_by: "agent" | "user";
+  created_at: string;
+  updated_at: string;
+  tags: string[];
+}
+
+export interface SkillDetail extends SkillMeta {
+  content: string;
+  raw: string;
+  files: string[];
+}
+
+export interface SkillCreate {
+  name: string;
+  description: string;
+  agent_type: "browser" | "developer" | "document";
+  content: string;
+  tags: string[];
+}
+
+export interface SkillUpdate {
+  description?: string;
+  content?: string;
+  tags?: string[];
+  enabled?: boolean;
+}
+
+export interface SkillStats {
+  name: string;
+  loads: number;
+  patches: number;
+  last_used: string | null;
+}
+
 declare global {
   interface Window {
     electronAPI: {
