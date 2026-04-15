@@ -4,6 +4,9 @@ import Sidebar from "./components/layout/Sidebar";
 import ChatArea from "./components/layout/ChatArea";
 import InputBar from "./components/layout/InputBar";
 import SettingsModal from "./components/settings/SettingsModal";
+import SkillList from "./components/skills/SkillList";
+import SkillDetailView from "./components/skills/SkillDetailView";
+import SkillEditor from "./components/skills/SkillEditor";
 import { useStore } from "./stores/store";
 import { initApiUrl } from "./services/api";
 
@@ -11,6 +14,10 @@ const App: React.FC = () => {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const theme = useStore((s) => s.settings.theme);
+  const showSkills = useStore((s) => s.showSkills);
+  const skillsView = useStore((s) => s.skillsView);
+  const setShowSkills = useStore((s) => s.setShowSkills);
+  const setSkillsView = useStore((s) => s.setSkillsView);
   useEffect(() => {
     initApiUrl();
   }, []);
@@ -74,6 +81,39 @@ const App: React.FC = () => {
       </div>
 
       <SettingsModal />
+
+      {showSkills && (
+        <div className="fixed inset-0 z-50 bg-warm-100">
+          {skillsView.page === "list" && (
+            <SkillList
+              onSelect={(name) => setSkillsView({ page: "detail", name })}
+              onNew={() => setSkillsView({ page: "new" })}
+              onBack={() => setShowSkills(false)}
+            />
+          )}
+          {skillsView.page === "detail" && skillsView.name && (
+            <SkillDetailView
+              name={skillsView.name}
+              onBack={() => setSkillsView({ page: "list" })}
+              onEdit={(name) => setSkillsView({ page: "edit", name })}
+              onDeleted={() => setSkillsView({ page: "list" })}
+            />
+          )}
+          {skillsView.page === "edit" && skillsView.name && (
+            <SkillEditor
+              name={skillsView.name}
+              onBack={() => setSkillsView({ page: "detail", name: skillsView.name })}
+              onSaved={(name) => setSkillsView({ page: "detail", name })}
+            />
+          )}
+          {skillsView.page === "new" && (
+            <SkillEditor
+              onBack={() => setSkillsView({ page: "list" })}
+              onSaved={(name) => setSkillsView({ page: "detail", name })}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 };

@@ -54,6 +54,12 @@ interface AppState {
   setSkillStats: (stats: SkillStats[]) => void;
   updateSkillInList: (updated: SkillMeta) => void;
   removeSkillFromList: (name: string) => void;
+
+  // Skills UI
+  showSkills: boolean;
+  setShowSkills: (show: boolean) => void;
+  skillsView: { page: "list" | "detail" | "edit" | "new"; name?: string };
+  setSkillsView: (view: { page: "list" | "detail" | "edit" | "new"; name?: string }) => void;
 }
 
 function sortConversations(conversations: Conversation[]): Conversation[] {
@@ -500,6 +506,34 @@ export const useStore = create<AppState>((set) => ({
           };
         }
 
+        case 'skill_loaded':
+        case 'insight_marked':
+        case 'skill_evolved': {
+          const tsSkill = s.taskStates[conversationId] || {
+            status: 'executing' as const, subTasks: [], activeAgents: [], agentLogs: [], streamingDecomposeText: '', pendingAsk: null,
+          };
+          return {
+            taskStates: {
+              ...s.taskStates,
+              [conversationId]: {
+                ...tsSkill,
+                agentLogs: [
+                  ...(tsSkill.agentLogs || []),
+                  {
+                    agentId: String(data.agent || 'system'),
+                    agentName: String(data.agent || 'Skill System'),
+                    processTaskId: '',
+                    status: 'done' as const,
+                    inputMessage: step,
+                    outputMessage: JSON.stringify(data),
+                    timestamp: new Date().toISOString(),
+                  },
+                ],
+              },
+            },
+          };
+        }
+
         default:
           return {};
       }
@@ -524,4 +558,10 @@ export const useStore = create<AppState>((set) => ({
     set((s) => ({
       skills: s.skills.filter((sk) => sk.name !== name),
     })),
+
+  // Skills UI
+  showSkills: false,
+  setShowSkills: (show) => set({ showSkills: show, skillsView: { page: "list" } }),
+  skillsView: { page: "list" },
+  setSkillsView: (view) => set({ skillsView: view }),
 }));

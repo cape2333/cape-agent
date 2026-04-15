@@ -1,5 +1,5 @@
 import React from "react";
-import { PanelLeftClose, Plus, Trash2, Settings } from "lucide-react";
+import { PanelLeftClose, Plus, Trash2, Settings, Zap } from "lucide-react";
 import { useConversations } from "../../hooks/useConversations";
 import { useStore } from "../../stores/store";
 
@@ -7,6 +7,7 @@ const Sidebar: React.FC = () => {
   const { conversations, activeConversationId, createNew, select, remove } =
     useConversations();
   const setShowSettings = useStore((s) => s.setShowSettings);
+  const setShowSkills = useStore((s) => s.setShowSkills);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
 
   return (
@@ -84,8 +85,15 @@ const Sidebar: React.FC = () => {
         })}
       </div>
 
-      {/* Settings button */}
-      <div className="px-4 pb-4">
+      {/* Skills + Settings buttons */}
+      <div className="px-4 pb-4 space-y-1">
+        <button
+          onClick={() => setShowSkills(true)}
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-navy-light hover:text-navy transition-colors rounded-2xl hover:bg-warm-100 w-full"
+        >
+          <Zap size={16} />
+          Skills
+        </button>
         <button
           onClick={() => setShowSettings(true)}
           className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-navy-light hover:text-navy transition-colors rounded-2xl hover:bg-warm-100 w-full"
