@@ -1,10 +1,9 @@
 import logging
 import os
-import signal
-import time
 from pathlib import Path
 from typing import List
 
+import psutil
 from camel.toolkits import FunctionTool
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,21 @@ def _ws_is_dead(ws_wrapper) -> bool:
     return False
 
 
+def _browser_process_dead(ws_wrapper) -> bool:
+    """Check if the Node.js driver subprocess behind the WS has exited.
+
+    The driver launches Chromium and pipes CDP over WebSocket. If the
+    driver exits, the WS is effectively useless even if reconnection
+    would succeed at the socket layer.
+    """
+    if ws_wrapper is None:
+        return False
+    proc = getattr(ws_wrapper, "process", None)
+    if proc is None:
+        return False
+    return proc.poll() is not None
+
+
 class BrowserService:
     """Manages HybridBrowserToolkit with its own stealth browser instance."""
 
@@ -39,64 +53,64 @@ class BrowserService:
 
     @staticmethod
     def _kill_stale_chromium(profile_dir: str) -> None:
-        """Kill any orphaned Chromium process using our profile directory."""
-        lock_path = os.path.join(profile_dir, "SingletonLock")
-        if not os.path.islink(lock_path) and not os.path.exists(lock_path):
-            return
+        """Kill every process still holding the browser profile, then drop
+        the SingletonLock file.
 
-        # SingletonLock is a symlink whose target encodes "hostname-PID"
-        try:
-            target = os.readlink(lock_path)
-            pid_str = target.rsplit("-", 1)[-1]
-            pid = int(pid_str)
-        except (OSError, ValueError, IndexError):
-            # Broken/unreadable link – just remove it
+        Chromium's ``SingletonLock`` only points at the main browser PID,
+        but a live Chromium session also spawns many helper processes
+        (renderer, GPU, utility). Killing only the main PID leaves
+        helpers anchored to the profile dir, so the next launch still
+        fails with ``SingletonLock: File exists``. We instead enumerate
+        every process whose cmdline references our profile and terminate
+        the lot before clearing the lock file.
+        """
+        profile_dir = os.path.abspath(profile_dir)
+        needle = f"--user-data-dir={profile_dir}"
+
+        victims: list[psutil.Process] = []
+        for proc in psutil.process_iter(["pid", "cmdline"]):
             try:
-                os.remove(lock_path)
-                logger.info(f"Removed broken SingletonLock: {lock_path}")
-            except OSError:
-                pass
-            return
+                cmdline = proc.info.get("cmdline") or []
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            # Match either the exact flag form or any arg containing the
+            # profile path (covers ``--user-data-dir=<path>`` and
+            # ``--user-data-dir <path>`` and helper-process variants).
+            if any(needle in arg or profile_dir in arg for arg in cmdline):
+                victims.append(psutil.Process(proc.info["pid"]))
 
-        # Check if process is alive
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            # Process dead – remove stale lock
-            try:
-                os.remove(lock_path)
-                logger.info(
-                    f"Removed stale SingletonLock (PID {pid} dead): {lock_path}"
-                )
-            except OSError:
-                pass
-            return
-
-        # Process is alive – kill the orphaned Chromium
-        logger.info(f"Killing orphaned Chromium process {pid}")
-        try:
-            os.kill(pid, signal.SIGTERM)
-            # Wait up to 3 seconds for graceful exit
-            for _ in range(30):
-                time.sleep(0.1)
+        if victims:
+            logger.info(
+                "Killing %d stale process(es) holding profile %s: pids=%s",
+                len(victims),
+                profile_dir,
+                [p.pid for p in victims],
+            )
+            for p in victims:
                 try:
-                    os.kill(pid, 0)
-                except OSError:
-                    break  # Process exited
-            else:
-                # Still alive after 3s – force kill
-                logger.warning(f"Force-killing Chromium process {pid}")
-                os.kill(pid, signal.SIGKILL)
-                time.sleep(0.5)
-        except OSError:
-            pass  # Process already gone
+                    p.terminate()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            gone, alive = psutil.wait_procs(victims, timeout=3)
+            for p in alive:
+                logger.warning("Force-killing stubborn PID %s", p.pid)
+                try:
+                    p.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            psutil.wait_procs(alive, timeout=2)
 
-        # Remove lock file
-        try:
-            os.remove(lock_path)
-            logger.info(f"Removed SingletonLock after killing PID {pid}")
-        except OSError:
-            pass
+        # Always clear lock files once processes are gone. macOS Chromium
+        # can leave SingletonLock / SingletonSocket / SingletonCookie
+        # behind after a crash — each blocks the next launch.
+        for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+            path = os.path.join(profile_dir, name)
+            if os.path.islink(path) or os.path.exists(path):
+                try:
+                    os.remove(path)
+                    logger.info("Removed stale %s: %s", name, path)
+                except OSError as e:
+                    logger.warning("Could not remove %s: %s", path, e)
 
     async def connect(self) -> None:
         """Launch a stealth browser via HybridBrowserToolkit."""
@@ -133,6 +147,28 @@ class BrowserService:
 
         async def _ensure_ws_with_reconnect():
             ws = self._toolkit._ws_wrapper
+            proc_dead = _browser_process_dead(ws)
+            if proc_dead:
+                # Driver subprocess exited — the browser is gone. A
+                # simple WS reconnect can't recover this; mark the
+                # service disconnected so callers can trigger a full
+                # connect() which relaunches Chromium and cleans the
+                # stale profile lock.
+                logger.warning(
+                    "Browser driver subprocess exited (rc=%s); "
+                    "marking service disconnected",
+                    ws.process.returncode if ws and ws.process else "?",
+                )
+                try:
+                    await ws.stop()
+                except Exception as e:
+                    logger.warning(f"Error stopping dead wrapper: {e}")
+                self._toolkit._ws_wrapper = None
+                self._connected = False
+                raise RuntimeError(
+                    "Browser driver subprocess exited; call "
+                    "browser_service.connect() to relaunch."
+                )
             if _ws_is_dead(ws):
                 logger.info(
                     "Dead WebSocket detected, reconnecting..."
