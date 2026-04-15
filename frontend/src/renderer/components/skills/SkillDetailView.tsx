@@ -17,11 +17,15 @@ const SkillDetailView: React.FC<Props> = ({ name, onBack, onEdit, onDeleted }) =
   const [loading, setLoading] = useState(true);
   const skillStats = useStore((s) => s.skillStats);
   const stats = skillStats[name];
+  // Re-fetch when the list's version bumps (e.g. toggled enabled elsewhere).
+  const externalVersion = useStore(
+    (s) => s.skills.find((x) => x.name === name)?.version
+  );
 
   useEffect(() => {
     setLoading(true);
     api.fetchSkillDetail(name).then(setSkill).finally(() => setLoading(false));
-  }, [name]);
+  }, [name, externalVersion]);
 
   const handleDelete = async () => {
     if (!confirm(`Delete skill "${name}"?`)) return;

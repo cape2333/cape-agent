@@ -111,7 +111,13 @@ async def review_insights(
     try:
         await reviewer.astep(prompt)
     except Exception as e:
-        logger.warning(f"Skill review failed: {e}")
+        # Keep insights for the next attempt so data isn't lost on a
+        # transient LLM / network failure.
+        logger.warning(
+            f"Skill review failed for conversation {conversation_id}; "
+            f"insights retained for retry: {e}"
+        )
+        return
 
     log.clear_insights(conversation_id)
     logger.info(f"Skill review completed for conversation {conversation_id}")

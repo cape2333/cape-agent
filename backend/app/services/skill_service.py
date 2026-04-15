@@ -207,9 +207,18 @@ class SkillService:
             "tags": tags or [],
         }
         skill_dir = self._dir / agent_type / name
+        created_new_dir = not skill_dir.exists()
         skill_dir.mkdir(parents=True, exist_ok=True)
         md_path = skill_dir / "SKILL.md"
-        md_path.write_text(self._build_skill_md(fm, content), encoding="utf-8")
+        try:
+            md_path.write_text(
+                self._build_skill_md(fm, content), encoding="utf-8"
+            )
+        except Exception:
+            # Don't leave a half-initialized skill directory on disk.
+            if created_new_dir:
+                shutil.rmtree(skill_dir, ignore_errors=True)
+            raise
         self._invalidate_snapshot()
         return self._meta_from_fm(fm)
 
@@ -281,20 +290,25 @@ class SkillService:
         md_path = skill_dir / "SKILL.md"
         fm, body = self._parse_skill_md(md_path)
 
-        if description is not None:
+        changed = False
+        if description is not None and fm.get("description") != description:
             fm["description"] = description
-        if content is not None:
+            changed = True
+        if content is not None and body != content:
             body = content
-        if tags is not None:
+            changed = True
+        if tags is not None and fm.get("tags") != tags:
             fm["tags"] = tags
-        if enabled is not None:
+            changed = True
+        if enabled is not None and fm.get("enabled") != enabled:
             fm["enabled"] = enabled
+            changed = True
 
-        fm["version"] = fm.get("version", 1) + 1
-        fm["updated_at"] = self._now_iso()
-
-        md_path.write_text(self._build_skill_md(fm, body), encoding="utf-8")
-        self._invalidate_snapshot()
+        if changed:
+            fm["version"] = fm.get("version", 1) + 1
+            fm["updated_at"] = self._now_iso()
+            md_path.write_text(self._build_skill_md(fm, body), encoding="utf-8")
+            self._invalidate_snapshot()
 
         # Return SkillDetail so callers can inspect content after update
         meta = self._meta_from_fm(fm)

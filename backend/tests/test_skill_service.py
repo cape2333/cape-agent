@@ -172,6 +172,53 @@ class TestUpdateValidation:
         with pytest.raises(ValueError, match="Content exceeds"):
             svc.update_skill("u2", content="x" * 60_000)
 
+    def test_update_with_no_changes_does_not_bump_version(self, svc, skill_dir):
+        svc.create_skill(
+            name="noop", description="d", agent_type="browser",
+            content="body", created_by="user",
+        )
+        md = skill_dir / "browser" / "noop" / "SKILL.md"
+        first_mtime_ns = md.stat().st_mtime_ns
+
+        # All None: no-op
+        result = svc.update_skill("noop")
+        assert result.version == 1
+        assert md.stat().st_mtime_ns == first_mtime_ns
+
+        # Same values as stored: still no-op
+        result = svc.update_skill("noop", description="d", content="body")
+        assert result.version == 1
+        assert md.stat().st_mtime_ns == first_mtime_ns
+
+    def test_update_only_writes_when_field_changes(self, svc):
+        svc.create_skill(
+            name="once", description="d", agent_type="browser",
+            content="body", created_by="user",
+        )
+        r = svc.update_skill("once", description="new")
+        assert r.version == 2
+        assert r.description == "new"
+
+
+class TestCreateFailureCleanup:
+    def test_write_failure_removes_new_skill_dir(self, svc, skill_dir, monkeypatch):
+        # Force the write to fail after mkdir.
+        from pathlib import Path as _P
+        orig_write_text = _P.write_text
+        def boom(self, *a, **kw):
+            if self.name == "SKILL.md":
+                raise OSError("simulated disk full")
+            return orig_write_text(self, *a, **kw)
+        monkeypatch.setattr(_P, "write_text", boom)
+
+        with pytest.raises(OSError, match="simulated disk full"):
+            svc.create_skill(
+                name="doomed", description="d", agent_type="browser",
+                content="body", created_by="user",
+            )
+        # Directory must not linger on disk.
+        assert not (skill_dir / "browser" / "doomed").exists()
+
 
 class TestResolveSkillFile:
     @pytest.fixture

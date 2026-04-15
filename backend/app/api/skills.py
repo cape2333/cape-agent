@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -8,7 +7,6 @@ from fastapi import APIRouter, HTTPException, Query
 from app.models.skill_schemas import (
     SkillCreate,
     SkillDetail,
-    SkillLogEntry,
     SkillMeta,
     SkillStats,
     SkillUpdate,
@@ -16,9 +14,11 @@ from app.models.skill_schemas import (
 from app.services.skill_service import skill_service
 from app.services.skill_logger import skill_logger
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api/skills", tags=["skills"])
+
+
+def _update_error_status(msg: str) -> int:
+    return 404 if "not found" in msg.lower() else 400
 
 
 @router.get("", response_model=list[SkillMeta])
@@ -42,13 +42,11 @@ async def get_stats():
 @router.get("/logs")
 async def get_logs(limit: int = Query(50), skill: Optional[str] = Query(None)):
     import json
-    from pathlib import Path
     from datetime import datetime, timezone
 
-    log_dir = skill_logger._dir
     entries = []
     month = datetime.now(timezone.utc).strftime("%Y-%m")
-    events_file = log_dir / month / "events.jsonl"
+    events_file = skill_logger.log_dir / month / "events.jsonl"
     if events_file.exists():
         for line in events_file.read_text(encoding="utf-8").strip().split("\n"):
             if not line.strip():
@@ -86,20 +84,6 @@ async def create_skill(req: SkillCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.put("/{name}", response_model=SkillMeta)
-async def update_skill_full(name: str, req: SkillUpdate):
-    try:
-        return skill_service.update_skill(
-            name,
-            description=req.description,
-            content=req.content,
-            tags=req.tags,
-            enabled=req.enabled,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
 @router.patch("/{name}", response_model=SkillMeta)
 async def update_skill_partial(name: str, req: SkillUpdate):
     try:
@@ -111,7 +95,8 @@ async def update_skill_partial(name: str, req: SkillUpdate):
             enabled=req.enabled,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        msg = str(e)
+        raise HTTPException(status_code=_update_error_status(msg), detail=msg)
 
 
 @router.delete("/{name}")

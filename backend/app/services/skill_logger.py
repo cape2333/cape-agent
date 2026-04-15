@@ -10,9 +10,9 @@ SKILLS_LOG_DIR = Path.home() / ".cape-agent" / "skills" / ".log"
 
 class SkillLogger:
     def __init__(self, log_dir: Path | None = None):
-        self._dir = log_dir or SKILLS_LOG_DIR
-        self._stats_path = self._dir / "stats.json"
-        self._insights_path = self._dir / "insights-pending.jsonl"
+        self.log_dir: Path = log_dir or SKILLS_LOG_DIR
+        self._stats_path = self.log_dir / "stats.json"
+        self._insights_path = self.log_dir / "insights-pending.jsonl"
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -36,7 +36,7 @@ class SkillLogger:
         extra: dict | None = None,
     ) -> None:
         month = datetime.now(timezone.utc).strftime("%Y-%m")
-        events_file = self._dir / month / "events.jsonl"
+        events_file = self.log_dir / month / "events.jsonl"
 
         entry = {
             "event": event,
@@ -65,7 +65,7 @@ class SkillLogger:
         The lock file is a sibling of stats.json so locking works even when
         stats.json itself is being recreated.
         """
-        self._dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
         lock_path = self._stats_path.with_suffix(".json.lock")
         with open(lock_path, "a+", encoding="utf-8") as lockf:
             fcntl.flock(lockf, fcntl.LOCK_EX)

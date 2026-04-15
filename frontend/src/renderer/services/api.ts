@@ -193,7 +193,7 @@ export async function createSkill(data: SkillCreate): Promise<SkillMeta> {
 export async function updateSkill(name: string, data: SkillUpdate): Promise<SkillMeta> {
   await ensureApiUrl();
   const res = await fetch(`${BASE_URL}/api/skills/${name}`, {
-    method: "PUT",
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
