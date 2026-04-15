@@ -120,3 +120,54 @@ class TestGetTools:
         assert "skill_view" in names
         assert "skill_manage" in names
         assert "mark_insight" in names
+
+
+class TestSSEEventEmission:
+    """Verify SSE events reach task_lock.queue without needing an asyncio
+    loop in the calling thread — the previous asyncio.get_event_loop()
+    implementation broke on Python 3.12+.
+    """
+
+    def test_skill_view_emits_event_without_running_loop(self, services):
+        from app.services.task_lock import TaskLock
+        from app.models.enums import Status
+
+        svc, logger, _ = services
+        svc.create_skill(
+            name="evt", description="d", agent_type="browser",
+            content="body", created_by="user",
+        )
+        tl = TaskLock(id="c1", status=Status.executing)
+        tk = SkillToolkit(
+            agent_type="browser",
+            skill_service=svc,
+            skill_logger=logger,
+            conversation_id="c1",
+            task_lock=tl,
+        )
+        # Called from sync code with no running event loop:
+        tk.skill_view("evt")
+        event = tl.queue.get_nowait()
+        assert event == {
+            "step": "skill_loaded",
+            "data": {"skill": "evt", "agent": "browser"},
+        }
+
+    def test_mark_insight_emits_event_without_running_loop(self, services):
+        from app.services.task_lock import TaskLock
+        from app.models.enums import Status
+
+        svc, logger, _ = services
+        tl = TaskLock(id="c2", status=Status.executing)
+        tk = SkillToolkit(
+            agent_type="developer",
+            skill_service=svc,
+            skill_logger=logger,
+            conversation_id="c2",
+            task_lock=tl,
+        )
+        tk.mark_insight("found a trick", "during retry")
+        event = tl.queue.get_nowait()
+        assert event["step"] == "insight_marked"
+        assert event["data"]["agent"] == "developer"
+        assert event["data"]["summary"] == "found a trick"

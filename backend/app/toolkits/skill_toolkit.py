@@ -28,6 +28,17 @@ class SkillToolkit:
         self._conversation_id = conversation_id
         self._task_lock = task_lock
 
+    def _emit_event(self, step: str, data: dict) -> None:
+        """Best-effort SSE event emission. Safe to call from sync code and
+        from contexts without a running event loop.
+        """
+        if not self._task_lock:
+            return
+        try:
+            self._task_lock.queue.put_nowait({"step": step, "data": data})
+        except Exception as e:
+            logger.debug("skill event %s dropped: %s", step, e)
+
     def skill_view(self, name: str, file_path: Optional[str] = None) -> str:
         """Load a skill's full content by name.
 
@@ -49,16 +60,7 @@ class SkillToolkit:
             "skill_loaded", name, detail.agent_type, self._conversation_id
         )
 
-        if self._task_lock:
-            import asyncio
-            try:
-                asyncio.get_event_loop().create_task(
-                    self._task_lock.put_event("skill_loaded", {
-                        "skill": name, "agent": self.agent_type,
-                    })
-                )
-            except Exception:
-                pass
+        self._emit_event("skill_loaded", {"skill": name, "agent": self.agent_type})
 
         if file_path:
             target = self._svc.resolve_skill_file(name, file_path)
@@ -179,16 +181,9 @@ class SkillToolkit:
             self.agent_type, summary, context, self._conversation_id
         )
 
-        if self._task_lock:
-            import asyncio
-            try:
-                asyncio.get_event_loop().create_task(
-                    self._task_lock.put_event("insight_marked", {
-                        "agent": self.agent_type, "summary": summary[:200],
-                    })
-                )
-            except Exception:
-                pass
+        self._emit_event("insight_marked", {
+            "agent": self.agent_type, "summary": summary[:200],
+        })
 
         return f"Insight recorded: {summary[:80]}"
 

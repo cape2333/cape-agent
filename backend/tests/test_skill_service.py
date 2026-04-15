@@ -155,6 +155,24 @@ class TestSnapshot:
         assert result[0].description == "from-cache"
 
 
+class TestUpdateValidation:
+    def test_update_rejects_long_description(self, svc):
+        svc.create_skill(
+            name="u", description="d", agent_type="browser",
+            content="body", created_by="user",
+        )
+        with pytest.raises(ValueError, match="Description exceeds"):
+            svc.update_skill("u", description="x" * 1000)
+
+    def test_update_rejects_long_content(self, svc):
+        svc.create_skill(
+            name="u2", description="d", agent_type="browser",
+            content="body", created_by="user",
+        )
+        with pytest.raises(ValueError, match="Content exceeds"):
+            svc.update_skill("u2", content="x" * 60_000)
+
+
 class TestResolveSkillFile:
     @pytest.fixture
     def svc_with_skill(self, svc):

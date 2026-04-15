@@ -274,6 +274,10 @@ class SkillService:
         skill_dir = self.find_skill_dir(name)
         if not skill_dir:
             raise ValueError(f"Skill '{name}' not found.")
+        if description is not None and len(description) > MAX_DESC_LEN:
+            raise ValueError(f"Description exceeds {MAX_DESC_LEN} chars.")
+        if content is not None and len(content) > MAX_CONTENT_CHARS:
+            raise ValueError(f"Content exceeds {MAX_CONTENT_CHARS} chars.")
         md_path = skill_dir / "SKILL.md"
         fm, body = self._parse_skill_md(md_path)
 

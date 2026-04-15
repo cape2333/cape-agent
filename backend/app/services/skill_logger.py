@@ -17,6 +17,16 @@ class SkillLogger:
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
+    def _locked_append(self, path: Path, line: str) -> None:
+        """Append a single line to `path` under an exclusive file lock."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.write(line + "\n")
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
     def log_event(
         self,
         event: str,
@@ -26,9 +36,7 @@ class SkillLogger:
         extra: dict | None = None,
     ) -> None:
         month = datetime.now(timezone.utc).strftime("%Y-%m")
-        month_dir = self._dir / month
-        month_dir.mkdir(parents=True, exist_ok=True)
-        events_file = month_dir / "events.jsonl"
+        events_file = self._dir / month / "events.jsonl"
 
         entry = {
             "event": event,
@@ -40,9 +48,7 @@ class SkillLogger:
         if extra:
             entry.update(extra)
 
-        with open(events_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
+        self._locked_append(events_file, json.dumps(entry, ensure_ascii=False))
         self._update_stats(event, skill)
 
     def _load_stats(self) -> dict:
@@ -53,23 +59,29 @@ class SkillLogger:
         except (json.JSONDecodeError, OSError):
             return {}
 
-    def _save_stats(self, stats: dict) -> None:
-        self._dir.mkdir(parents=True, exist_ok=True)
-        self._stats_path.write_text(
-            json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-
     def _update_stats(self, event: str, skill: str) -> None:
-        stats = self._load_stats()
-        entry = stats.setdefault(skill, {"loads": 0, "patches": 0, "last_used": None})
-        if event == "skill_loaded":
-            entry["loads"] += 1
-            entry["last_used"] = self._now_iso()
-        elif event == "skill_patched":
-            entry["patches"] += 1
-        elif event == "skill_created":
-            pass
-        self._save_stats(stats)
+        """Read-modify-write of stats.json under an exclusive lock.
+
+        The lock file is a sibling of stats.json so locking works even when
+        stats.json itself is being recreated.
+        """
+        self._dir.mkdir(parents=True, exist_ok=True)
+        lock_path = self._stats_path.with_suffix(".json.lock")
+        with open(lock_path, "a+", encoding="utf-8") as lockf:
+            fcntl.flock(lockf, fcntl.LOCK_EX)
+            try:
+                stats = self._load_stats()
+                entry = stats.setdefault(skill, {"loads": 0, "patches": 0, "last_used": None})
+                if event == "skill_loaded":
+                    entry["loads"] += 1
+                    entry["last_used"] = self._now_iso()
+                elif event == "skill_patched":
+                    entry["patches"] += 1
+                self._stats_path.write_text(
+                    json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+            finally:
+                fcntl.flock(lockf, fcntl.LOCK_UN)
 
     def get_stats(self) -> dict:
         return self._load_stats()
@@ -81,7 +93,6 @@ class SkillLogger:
         context: str,
         conversation_id: str,
     ) -> None:
-        self._dir.mkdir(parents=True, exist_ok=True)
         entry = {
             "agent_type": agent_type,
             "summary": summary,
@@ -89,10 +100,9 @@ class SkillLogger:
             "conversation_id": conversation_id,
             "timestamp": self._now_iso(),
         }
-        with open(self._insights_path, "a", encoding="utf-8") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            fcntl.flock(f, fcntl.LOCK_UN)
+        self._locked_append(
+            self._insights_path, json.dumps(entry, ensure_ascii=False)
+        )
 
     def read_pending_insights(self, conversation_id: str) -> list[dict]:
         if not self._insights_path.exists():
@@ -110,24 +120,32 @@ class SkillLogger:
         return results
 
     def clear_insights(self, conversation_id: str) -> None:
+        """Rewrite insights-pending.jsonl without entries for the given
+        conversation. Read, filter, and rewrite happen under a single
+        exclusive lock so concurrent writers cannot slip in between.
+        """
         if not self._insights_path.exists():
             return
-        lines = self._insights_path.read_text(encoding="utf-8").strip().split("\n")
-        remaining = []
-        for line in lines:
-            if not line.strip():
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if entry.get("conversation_id") != conversation_id:
-                remaining.append(line)
-        with open(self._insights_path, "w", encoding="utf-8") as f:
+        with open(self._insights_path, "r+", encoding="utf-8") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
-            for line in remaining:
-                f.write(line + "\n")
-            fcntl.flock(f, fcntl.LOCK_UN)
+            try:
+                lines = f.read().strip().split("\n")
+                remaining = []
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if entry.get("conversation_id") != conversation_id:
+                        remaining.append(line)
+                f.seek(0)
+                f.truncate()
+                for line in remaining:
+                    f.write(line + "\n")
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
 
 
 # Module-level singleton

@@ -48,3 +48,71 @@ class TestSkillLogger:
         logger.clear_insights("conv-1")
         assert len(logger.read_pending_insights("conv-1")) == 0
         assert len(logger.read_pending_insights("conv-2")) == 1
+
+
+class TestSkillLoggerConcurrency:
+    def test_concurrent_log_event_preserves_all_entries(self, logger, tmp_path):
+        """Multiple threads calling log_event must not lose or interleave lines."""
+        import threading
+        N_THREADS = 8
+        N_PER_THREAD = 25
+        def worker(tid):
+            for i in range(N_PER_THREAD):
+                logger.log_event(
+                    "skill_loaded", f"s-{tid}-{i}", "browser", f"conv-{tid}"
+                )
+        threads = [threading.Thread(target=worker, args=(t,)) for t in range(N_THREADS)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        events_file = next((tmp_path / ".log").rglob("events.jsonl"))
+        lines = [l for l in events_file.read_text().splitlines() if l.strip()]
+        assert len(lines) == N_THREADS * N_PER_THREAD
+        for line in lines:
+            json.loads(line)  # every line parses (no interleaving)
+
+    def test_concurrent_write_insight_preserves_all(self, logger):
+        import threading
+        N = 50
+        def worker(i):
+            logger.write_insight("browser", f"sum-{i}", "", "conv-x")
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(N)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        assert len(logger.read_pending_insights("conv-x")) == N
+
+    def test_concurrent_stats_update_does_not_lose(self, logger):
+        import threading
+        N = 40
+        def worker():
+            logger.log_event("skill_loaded", "shared", "browser", "c")
+        threads = [threading.Thread(target=worker) for _ in range(N)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        assert logger.get_stats()["shared"]["loads"] == N
+
+    def test_clear_insights_survives_concurrent_writer(self, logger):
+        """clear_insights reading, filtering, and rewriting under one lock
+        must not drop insights appended by a concurrent write_insight."""
+        import threading
+        for i in range(20):
+            logger.write_insight("browser", f"pre-{i}", "", "conv-keep")
+        for i in range(10):
+            logger.write_insight("browser", f"drop-{i}", "", "conv-drop")
+
+        stop = threading.Event()
+        def appender():
+            i = 0
+            while not stop.is_set():
+                logger.write_insight("browser", f"live-{i}", "", "conv-keep")
+                i += 1
+        t = threading.Thread(target=appender); t.start()
+        try:
+            for _ in range(20):
+                logger.clear_insights("conv-drop")
+        finally:
+            stop.set(); t.join()
+
+        assert len(logger.read_pending_insights("conv-drop")) == 0
+        kept = logger.read_pending_insights("conv-keep")
+        assert len(kept) >= 20
+        assert all(k["summary"].startswith(("pre-", "live-")) for k in kept)
