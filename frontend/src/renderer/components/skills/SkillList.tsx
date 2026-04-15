@@ -36,9 +36,9 @@ const SkillList: React.FC<Props> = ({ onSelect, onNew, onBack }) => {
     if (search) {
       const q = search.toLowerCase();
       return (
-        s.name.includes(q) ||
+        s.name.toLowerCase().includes(q) ||
         s.description.toLowerCase().includes(q) ||
-        s.tags.some((t) => t.includes(q))
+        s.tags.some((t) => t.toLowerCase().includes(q))
       );
     }
     return true;

@@ -50,7 +50,7 @@ class SkillLogEntry(BaseModel):
     skill: str
     agent_type: str
     conversation_id: Optional[str] = None
-    timestamp: str
+    ts: str
 
 
 class InsightRecord(BaseModel):

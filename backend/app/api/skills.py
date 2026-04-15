@@ -31,12 +31,12 @@ async def list_skills(
 
 
 @router.get("/stats")
-async def get_stats():
+async def get_stats() -> dict[str, dict]:
     raw = skill_logger.get_stats()
-    return [
-        SkillStats(name=name, **data).model_dump()
+    return {
+        name: SkillStats(name=name, **data).model_dump()
         for name, data in raw.items()
-    ]
+    }
 
 
 @router.get("/logs")

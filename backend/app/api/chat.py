@@ -31,6 +31,20 @@ router = APIRouter(prefix="/api")
 # conversation_history across multiple workforce rounds.
 _active_task_locks: dict[str, TaskLock] = {}
 
+# Strong refs for fire-and-forget post-task skill review tasks.
+# Kept separate from TaskLock.background_tasks so request cleanup()
+# cannot cancel an in-flight review.
+_review_tasks: set[asyncio.Task] = set()
+
+
+def _on_review_done(task: asyncio.Task) -> None:
+    _review_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        logger.warning("Skill review task failed: %s", exc, exc_info=exc)
+
 
 @router.post("/chat")
 async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
@@ -173,13 +187,15 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
                                 review_model = build_model(
                                     provider, model_name, req.api_key, req.api_base, stream=False
                                 )
-                                asyncio.create_task(
+                                review_task = asyncio.create_task(
                                     review_insights(
                                         conversation_id=req.conversation_id,
                                         task_summary=content[:2000],
                                         model=review_model,
                                     )
                                 )
+                                _review_tasks.add(review_task)
+                                review_task.add_done_callback(_on_review_done)
                         except Exception as e:
                             logger.warning(f"Skill review trigger failed: {e}")
 

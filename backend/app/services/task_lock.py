@@ -31,6 +31,19 @@ class TaskLock:
     async def put_event(self, step: str, data: dict):
         await self.queue.put({"step": step, "data": data})
 
+    def emit_sync(self, step: str, data: dict) -> bool:
+        """Best-effort synchronous event emission.
+
+        Returns True if enqueued. Never raises — callers that run outside
+        an async context (e.g. agent tool calls) use this to surface
+        progress without having to juggle event loops.
+        """
+        try:
+            self.queue.put_nowait({"step": step, "data": data})
+            return True
+        except Exception:
+            return False
+
     async def get_event(self) -> dict:
         return await self.queue.get()
 

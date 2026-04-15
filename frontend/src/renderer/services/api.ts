@@ -166,7 +166,9 @@ export async function fetchSkills(agentType?: string): Promise<SkillMeta[]> {
   await ensureApiUrl();
   const params = agentType ? `?agent_type=${agentType}` : "";
   const res = await fetch(`${BASE_URL}/api/skills${params}`);
-  return res.json();
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function fetchSkillDetail(name: string): Promise<SkillDetail> {
@@ -210,8 +212,9 @@ export async function deleteSkill(name: string): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete skill");
 }
 
-export async function fetchSkillStats(): Promise<SkillStats[]> {
+export async function fetchSkillStats(): Promise<Record<string, SkillStats>> {
   await ensureApiUrl();
   const res = await fetch(`${BASE_URL}/api/skills/stats`);
+  if (!res.ok) return {};
   return res.json();
 }

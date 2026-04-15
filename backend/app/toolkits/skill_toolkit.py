@@ -34,10 +34,8 @@ class SkillToolkit:
         """
         if not self._task_lock:
             return
-        try:
-            self._task_lock.queue.put_nowait({"step": step, "data": data})
-        except Exception as e:
-            logger.debug("skill event %s dropped: %s", step, e)
+        if not self._task_lock.emit_sync(step, data):
+            logger.warning("skill event %s dropped (queue unavailable)", step)
 
     def skill_view(self, name: str, file_path: Optional[str] = None) -> str:
         """Load a skill's full content by name.
@@ -100,8 +98,13 @@ class SkillToolkit:
                 if not content:
                     return "Error: content is required for 'create'."
                 fm, body = self._svc.parse_skill_md_from_text(content)
+                target_name = fm.get("name", name)
+                # Idempotent: if a prior (partially-successful) review
+                # already created this skill, don't error out on retry.
+                if self._svc.find_skill_dir(target_name):
+                    return f"Skill '{target_name}' already exists; skipping create."
                 result = self._svc.create_skill(
-                    name=fm.get("name", name),
+                    name=target_name,
                     description=fm.get("description", ""),
                     agent_type=fm.get("agent_type", self.agent_type),
                     content=body.strip(),
@@ -134,6 +137,16 @@ class SkillToolkit:
                 if not content:
                     return "Error: content is required for 'edit'."
                 fm, body = self._svc.parse_skill_md_from_text(content)
+                existing = self._svc.get_skill(name)
+                if not existing:
+                    return f"Skill '{name}' not found."
+                new_agent_type = fm.get("agent_type")
+                if new_agent_type and new_agent_type != existing.agent_type:
+                    return (
+                        f"Error: agent_type of skill '{name}' cannot be changed "
+                        f"via edit (current: {existing.agent_type}). Delete and "
+                        f"recreate the skill if you really need to move it."
+                    )
                 result = self._svc.update_skill(
                     name,
                     description=fm.get("description"),

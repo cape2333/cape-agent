@@ -1,4 +1,13 @@
-"""Post-task background review that converts pending insights into skills."""
+"""Post-task background review that converts pending insights into skills.
+
+TODO(skill_evolved): the frontend store already handles a `skill_evolved`
+SSE event but no backend path emits one. By design, this reviewer runs
+AFTER the chat SSE stream has closed (`yield sse_json("end", ...)`),
+so there is no open channel left to push progress on. Delivering evolution
+events requires a second channel — a per-conversation notification SSE
+endpoint or a WebSocket the frontend holds open across chat rounds.
+Tracked as future work; not addressed here.
+"""
 
 from __future__ import annotations
 

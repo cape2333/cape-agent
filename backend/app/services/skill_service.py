@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import fcntl
 import json
+import os
 import re
 import shutil
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -152,6 +155,22 @@ class SkillService:
         new_manifest = self._build_manifest()
         return old_manifest != new_manifest
 
+    @contextmanager
+    def _snapshot_lock(self):
+        """Exclusive lock around snapshot read/write/invalidate.
+
+        The lock file is a sibling of the snapshot so locking works even
+        when the snapshot itself is being recreated or deleted.
+        """
+        self._dir.mkdir(parents=True, exist_ok=True)
+        lock_path = self._snapshot_path.with_suffix(".json.lock")
+        with open(lock_path, "a+", encoding="utf-8") as lockf:
+            fcntl.flock(lockf, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lockf, fcntl.LOCK_UN)
+
     def _load_snapshot(self) -> dict | None:
         if not self._snapshot_path.exists():
             return None
@@ -167,13 +186,18 @@ class SkillService:
             "manifest": self._build_manifest(),
             "skills": [s.model_dump() for s in skills],
         }
-        self._snapshot_path.write_text(
+        tmp_path = self._snapshot_path.with_suffix(".json.tmp")
+        tmp_path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        os.replace(tmp_path, self._snapshot_path)
 
     def _invalidate_snapshot(self) -> None:
-        if self._snapshot_path.exists():
-            self._snapshot_path.unlink()
+        with self._snapshot_lock():
+            try:
+                self._snapshot_path.unlink()
+            except FileNotFoundError:
+                pass
 
     # ── CRUD ─────────────────────────────────────────────────────
 
@@ -228,12 +252,13 @@ class SkillService:
         enabled: bool | None = None,
         tag: str | None = None,
     ) -> list[SkillMeta]:
-        snapshot = self._load_snapshot()
-        if snapshot and not self._is_snapshot_stale(snapshot):
-            skills = [SkillMeta(**s) for s in snapshot["skills"]]
-        else:
-            skills = self._scan_all()
-            self._save_snapshot(skills)
+        with self._snapshot_lock():
+            snapshot = self._load_snapshot()
+            if snapshot and not self._is_snapshot_stale(snapshot):
+                skills = [SkillMeta(**s) for s in snapshot["skills"]]
+            else:
+                skills = self._scan_all()
+                self._save_snapshot(skills)
 
         if agent_type:
             skills = [s for s in skills if s.agent_type == agent_type]

@@ -51,7 +51,7 @@ interface AppState {
   skillStats: Record<string, SkillStats>;
   setSkills: (skills: SkillMeta[]) => void;
   setActiveSkill: (skill: SkillDetail | null) => void;
-  setSkillStats: (stats: SkillStats[]) => void;
+  setSkillStats: (stats: Record<string, SkillStats>) => void;
   updateSkillInList: (updated: SkillMeta) => void;
   removeSkillFromList: (name: string) => void;
 
@@ -545,11 +545,7 @@ export const useStore = create<AppState>((set) => ({
   skillStats: {},
   setSkills: (skills) => set({ skills }),
   setActiveSkill: (skill) => set({ activeSkill: skill }),
-  setSkillStats: (stats) => {
-    const map: Record<string, SkillStats> = {};
-    for (const s of stats) map[s.name] = s;
-    set({ skillStats: map });
-  },
+  setSkillStats: (stats) => set({ skillStats: stats }),
   updateSkillInList: (updated) =>
     set((s) => ({
       skills: s.skills.map((sk) => (sk.name === updated.name ? { ...sk, ...updated } : sk)),
