@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Conversation, Message, AppSettings, AgentStep, SSEEvent, TaskStateInfo, SubTask, AgentActivity, AgentLog, PendingAsk } from "../types";
+import type { Conversation, Message, AppSettings, AgentStep, SSEEvent, TaskStateInfo, SubTask, AgentActivity, AgentLog, PendingAsk, SkillMeta, SkillDetail, SkillStats } from "../types";
 
 interface AppState {
   // Conversations
@@ -44,6 +44,16 @@ interface AppState {
   handleSSEEvent: (conversationId: string, event: SSEEvent) => void;
   resetTaskState: (conversationId: string) => void;
   clearPendingAsk: (conversationId: string) => void;
+
+  // Skills
+  skills: SkillMeta[];
+  activeSkill: SkillDetail | null;
+  skillStats: Record<string, SkillStats>;
+  setSkills: (skills: SkillMeta[]) => void;
+  setActiveSkill: (skill: SkillDetail | null) => void;
+  setSkillStats: (stats: SkillStats[]) => void;
+  updateSkillInList: (updated: SkillMeta) => void;
+  removeSkillFromList: (name: string) => void;
 }
 
 function sortConversations(conversations: Conversation[]): Conversation[] {
@@ -494,4 +504,24 @@ export const useStore = create<AppState>((set) => ({
           return {};
       }
     }),
+
+  // Skills
+  skills: [],
+  activeSkill: null,
+  skillStats: {},
+  setSkills: (skills) => set({ skills }),
+  setActiveSkill: (skill) => set({ activeSkill: skill }),
+  setSkillStats: (stats) => {
+    const map: Record<string, SkillStats> = {};
+    for (const s of stats) map[s.name] = s;
+    set({ skillStats: map });
+  },
+  updateSkillInList: (updated) =>
+    set((s) => ({
+      skills: s.skills.map((sk) => (sk.name === updated.name ? { ...sk, ...updated } : sk)),
+    })),
+  removeSkillFromList: (name) =>
+    set((s) => ({
+      skills: s.skills.filter((sk) => sk.name !== name),
+    })),
 }));
