@@ -20,6 +20,8 @@ from app.services.agent_service import build_agent, agent_chat, build_workforce,
 from app.services.task_lock import TaskLock
 from app.agents.factory import create_classifier_agent, classify_question
 from app.services.agent_service import build_model
+from app.services.skill_reviewer import review_insights
+from app.services.skill_logger import skill_logger
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +165,24 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
                             "content": content,
                             "conversation": conv.model_dump() if conv else None,
                         })
+
+                        # Trigger background skill review if insights exist
+                        try:
+                            pending = skill_logger.read_pending_insights(req.conversation_id)
+                            if pending:
+                                review_model = build_model(
+                                    provider, model_name, req.api_key, req.api_base, stream=False
+                                )
+                                asyncio.create_task(
+                                    review_insights(
+                                        conversation_id=req.conversation_id,
+                                        task_summary=content[:2000],
+                                        model=review_model,
+                                    )
+                                )
+                        except Exception as e:
+                            logger.warning(f"Skill review trigger failed: {e}")
+
                         break
                     elif event["step"] == "error":
                         yield sse_json("error", event["data"])

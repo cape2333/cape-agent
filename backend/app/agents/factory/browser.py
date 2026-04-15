@@ -132,6 +132,7 @@ def create_browser_agent(
         skill_service=skill_service,
         skill_logger=skill_logger,
         conversation_id=conversation_id,
+        task_lock=task_lock,
     )
     tools = tools + skill_toolkit.get_tools()
 

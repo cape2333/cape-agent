@@ -20,11 +20,13 @@ class SkillToolkit:
         skill_service: SkillService,
         skill_logger: SkillLogger,
         conversation_id: str = "",
+        task_lock=None,
     ):
         self.agent_type = agent_type
         self._svc = skill_service
         self._logger = skill_logger
         self._conversation_id = conversation_id
+        self._task_lock = task_lock
 
     def skill_view(self, name: str, file_path: Optional[str] = None) -> str:
         """Load a skill's full content by name.
@@ -46,6 +48,17 @@ class SkillToolkit:
         self._logger.log_event(
             "skill_loaded", name, detail.agent_type, self._conversation_id
         )
+
+        if self._task_lock:
+            import asyncio
+            try:
+                asyncio.get_event_loop().create_task(
+                    self._task_lock.put_event("skill_loaded", {
+                        "skill": name, "agent": self.agent_type,
+                    })
+                )
+            except Exception:
+                pass
 
         if file_path:
             skill_dir = self._svc.find_skill_dir(name)
@@ -165,6 +178,18 @@ class SkillToolkit:
         self._logger.write_insight(
             self.agent_type, summary, context, self._conversation_id
         )
+
+        if self._task_lock:
+            import asyncio
+            try:
+                asyncio.get_event_loop().create_task(
+                    self._task_lock.put_event("insight_marked", {
+                        "agent": self.agent_type, "summary": summary[:200],
+                    })
+                )
+            except Exception:
+                pass
+
         return f"Insight recorded: {summary[:80]}"
 
     def get_tools(self) -> list[FunctionTool]:
