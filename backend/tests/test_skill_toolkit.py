@@ -4,6 +4,7 @@ import pytest
 
 from app.services.skill_service import SkillService
 from app.services.skill_logger import SkillLogger
+from app.services.step_trace import StepTracer
 from app.toolkits.skill_toolkit import SkillToolkit
 
 
@@ -11,25 +12,28 @@ from app.toolkits.skill_toolkit import SkillToolkit
 def services(tmp_path):
     skills_dir = tmp_path / "skills"
     log_dir = skills_dir / ".log"
+    trace_dir = skills_dir / ".trace"
     svc = SkillService(skills_dir=skills_dir)
     logger = SkillLogger(log_dir=log_dir)
-    return svc, logger, skills_dir
+    tracer = StepTracer(root=trace_dir)
+    return svc, logger, skills_dir, tracer
 
 
 @pytest.fixture
 def toolkit(services):
-    svc, logger, _ = services
+    svc, logger, _, tracer = services
     return SkillToolkit(
         agent_type="browser",
         skill_service=svc,
         skill_logger=logger,
         conversation_id="conv-1",
+        step_tracer=tracer,
     )
 
 
 class TestSkillView:
     def test_view_existing_skill(self, toolkit, services):
-        svc, _, _ = services
+        svc, _, _, _ = services
         svc.create_skill(
             name="my-skill", description="desc", agent_type="browser",
             content="## Steps\n1. Do it", created_by="user",
@@ -42,7 +46,7 @@ class TestSkillView:
         assert "not found" in result.lower()
 
     def test_view_supporting_file(self, toolkit, services):
-        svc, _, _ = services
+        svc, _, _, _ = services
         svc.create_skill(
             name="with-refs", description="d", agent_type="browser",
             content="body", created_by="user",
@@ -56,7 +60,7 @@ class TestSkillView:
 
 class TestSkillManage:
     def test_create_via_manage(self, toolkit, services):
-        svc, _, _ = services
+        svc, _, _, _ = services
         result = toolkit.skill_manage(
             action="create", name="new-one",
             content="---\nname: new-one\ndescription: test\nagent_type: browser\nversion: 1\nenabled: true\ncreated_by: agent\ncreated_at: ''\nupdated_at: ''\ntags: []\n---\n\n## Steps\nDo it",
@@ -65,7 +69,7 @@ class TestSkillManage:
         assert svc.get_skill("new-one") is not None
 
     def test_edit_via_manage(self, toolkit, services):
-        svc, _, _ = services
+        svc, _, _, _ = services
         svc.create_skill(
             name="to-edit", description="old", agent_type="browser",
             content="old body", created_by="user",
@@ -80,7 +84,7 @@ class TestSkillManage:
         assert detail.description == "new"
 
     def test_patch_old_string_not_found(self, toolkit, services):
-        svc, _, _ = services
+        svc, _, _, _ = services
         svc.create_skill(
             name="patchable", description="d", agent_type="browser",
             content="hello world", created_by="user",
@@ -93,7 +97,7 @@ class TestSkillManage:
         assert svc.get_skill("patchable").content.strip() == "hello world"
 
     def test_delete_via_manage(self, toolkit, services):
-        svc, _, _ = services
+        svc, _, _, _ = services
         svc.create_skill(
             name="del-me", description="d", agent_type="browser",
             content="body", created_by="user",
@@ -104,13 +108,17 @@ class TestSkillManage:
 
 
 class TestMarkInsight:
-    def test_mark_records_insight(self, toolkit, services):
-        _, logger, _ = services
-        result = toolkit.mark_insight("Found a better search approach", "while searching papers")
+    def test_mark_records_annotation_in_trace(self, toolkit, services):
+        _, _, _, tracer = services
+        result = toolkit.mark_insight(
+            "Found a better search approach", "while searching papers"
+        )
         assert "recorded" in result.lower()
-        insights = logger.read_pending_insights("conv-1")
-        assert len(insights) == 1
-        assert insights[0]["summary"] == "Found a better search approach"
+        entries = tracer.read_round("conv-1", 0)
+        annotations = [e for e in entries if e.kind == "annotation"]
+        assert len(annotations) == 1
+        assert annotations[0].annotation_summary == "Found a better search approach"
+        assert annotations[0].annotation_context == "while searching papers"
 
 
 class TestGetTools:
@@ -132,7 +140,7 @@ class TestSSEEventEmission:
         from app.services.task_lock import TaskLock
         from app.models.enums import Status
 
-        svc, logger, _ = services
+        svc, logger, _, _ = services
         svc.create_skill(
             name="evt", description="d", agent_type="browser",
             content="body", created_by="user",
@@ -157,7 +165,7 @@ class TestSSEEventEmission:
         from app.services.task_lock import TaskLock
         from app.models.enums import Status
 
-        svc, logger, _ = services
+        svc, logger, _, _ = services
         tl = TaskLock(id="c2", status=Status.executing)
         tk = SkillToolkit(
             agent_type="developer",

@@ -9,6 +9,7 @@ from camel.toolkits import FunctionTool
 
 from app.services.skill_service import SkillService
 from app.services.skill_logger import SkillLogger
+from app.services.step_trace import StepTracer, step_tracer as _default_step_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,27 @@ class SkillToolkit:
         skill_logger: SkillLogger,
         conversation_id: str = "",
         task_lock=None,
+        step_tracer: "StepTracer | None" = None,
     ):
         self.agent_type = agent_type
         self._svc = skill_service
         self._logger = skill_logger
         self._conversation_id = conversation_id
         self._task_lock = task_lock
+        self._tracer = step_tracer or _default_step_tracer
+
+    def _round_idx(self) -> int:
+        """Current round index, derived from the task_lock conversation_history.
+
+        At the start of round N the history has N completed rounds in it.
+        Falls back to 0 when no task_lock is attached (e.g., reviewer).
+        """
+        if not self._task_lock:
+            return 0
+        try:
+            return len(self._task_lock.conversation_history)
+        except AttributeError:
+            return 0
 
     def _emit_event(self, step: str, data: dict) -> None:
         """Best-effort SSE event emission. Safe to call from sync code and
@@ -59,6 +75,11 @@ class SkillToolkit:
         )
 
         self._emit_event("skill_loaded", {"skill": name, "agent": self.agent_type})
+
+        if self._conversation_id:
+            self._tracer.record_skill_loaded(
+                self._conversation_id, self._round_idx(), name
+            )
 
         if file_path:
             target = self._svc.resolve_skill_file(name, file_path)
@@ -173,32 +194,39 @@ class SkillToolkit:
             return f"Error: {e}"
 
     def mark_insight(self, summary: str, context: str = "") -> str:
-        """Record an observation about an effective approach or pitfall.
+        """Annotate the current task trace with a subjective observation.
 
-        Call this when you discover something useful during task execution:
-        - A retry with a different approach succeeded
-        - You found a pitfall or workaround
-        - An existing skill was wrong or incomplete
+        Use this freely whenever you discover something the raw trace
+        won't capture — e.g. a hidden constraint, a workaround, "this
+        click is silently swallowed the first time", or "this API
+        returns 200 even when rate-limited". The Skill Miner reads
+        these annotations alongside the trajectory when deciding
+        whether to abstract a new skill or improve an existing one.
 
-        The insight will be reviewed after task completion and may become
-        a new skill or improve an existing one.
+        You do NOT need to call this only on failure. Annotate
+        anything mechanistically interesting; the Judge and Miner
+        decide what becomes a skill.
 
         Args:
             summary: Brief description of what you learned.
-            context: Additional context about the task.
+            context: Optional extra context.
 
         Returns:
             Confirmation message.
         """
-        self._logger.write_insight(
-            self.agent_type, summary, context, self._conversation_id
-        )
+        if self._conversation_id:
+            self._tracer.record_annotation(
+                self._conversation_id,
+                self._round_idx(),
+                summary=summary,
+                context=context,
+            )
 
         self._emit_event("insight_marked", {
             "agent": self.agent_type, "summary": summary[:200],
         })
 
-        return f"Insight recorded: {summary[:80]}"
+        return f"Annotation recorded: {summary[:80]}"
 
     def get_tools(self) -> list[FunctionTool]:
         return [

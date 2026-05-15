@@ -1,13 +1,21 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 from uuid import uuid4
 
 from camel.agents import ChatAgent
 from camel.agents._types import ToolCallRequest
 
+from app.services.step_trace import step_tracer
 from app.services.task_lock import TaskLock
 
 logger = logging.getLogger(__name__)
+
+
+# Tools provided by SkillToolkit. They already write their own
+# step-trace entries (`skill_loaded` / `annotation`) — recording them
+# again as generic `tool_call` entries would double-count and pollute
+# the miner's non-trivial-call trigger.
+_SKILL_TOOLKIT_TOOLS = frozenset({"skill_view", "skill_manage", "mark_insight"})
 
 
 class ListenChatAgent(ChatAgent):
@@ -70,15 +78,18 @@ class ListenChatAgent(ChatAgent):
             "method_name": tool_name,
             "message": tool_args,
         })
+        self._trace_tool_call(tool_name, tool_args)
 
         try:
             result = await super()._aexecute_tool(tool_call_request)
+            result_preview = self._tool_result_preview(result)
             await self.task_lock.put_event("deactivate_toolkit", {
                 "agent_name": self.agent_name,
                 "toolkit_name": toolkit_name,
                 "method_name": tool_name,
-                "message": self._tool_result_preview(result),
+                "message": result_preview,
             })
+            self._trace_tool_result(tool_name, result_preview, was_error=False)
             return result
         except Exception as e:
             await self.task_lock.put_event("deactivate_toolkit", {
@@ -87,6 +98,7 @@ class ListenChatAgent(ChatAgent):
                 "method_name": tool_name,
                 "message": f"Error: {str(e)}",
             })
+            self._trace_tool_result(tool_name, str(e)[:500], was_error=True)
             raise
 
     async def _aexecute_tool_from_stream_data(
@@ -102,15 +114,18 @@ class ListenChatAgent(ChatAgent):
             "method_name": tool_name,
             "message": str(tool_args)[:200],
         })
+        self._trace_tool_call(tool_name, str(tool_args)[:200])
 
         try:
             result = await super()._aexecute_tool_from_stream_data(tool_call_data)
+            result_preview = self._tool_result_preview(result)
             await self.task_lock.put_event("deactivate_toolkit", {
                 "agent_name": self.agent_name,
                 "toolkit_name": toolkit_name,
                 "method_name": tool_name,
-                "message": self._tool_result_preview(result),
+                "message": result_preview,
             })
+            self._trace_tool_result(tool_name, result_preview, was_error=False)
             return result
         except Exception as e:
             await self.task_lock.put_event("deactivate_toolkit", {
@@ -119,6 +134,7 @@ class ListenChatAgent(ChatAgent):
                 "method_name": tool_name,
                 "message": f"Error: {str(e)}",
             })
+            self._trace_tool_result(tool_name, str(e)[:500], was_error=True)
             raise
 
     def clone(self, with_memory: bool = False):
@@ -146,3 +162,53 @@ class ListenChatAgent(ChatAgent):
         if hasattr(result, "result"):
             result = result.result
         return str(result)[:2000]
+
+    def _trace_ids(self) -> Optional[Tuple[str, int]]:
+        """Return (conversation_id, round_idx) for step-trace recording.
+
+        Skipped (returns None) when no task_lock or no conversation id is
+        available — keeps non-workforce / classifier paths trace-free.
+        """
+        if not self.task_lock:
+            return None
+        conv_id = getattr(self.task_lock, "id", "") or ""
+        if not conv_id:
+            return None
+        try:
+            round_idx = len(self.task_lock.conversation_history)
+        except AttributeError:
+            round_idx = 0
+        return conv_id, round_idx
+
+    def _trace_tool_call(self, tool_name: str, args_summary: str) -> None:
+        # Skill-toolkit tools already produce their own trace entries
+        # (skill_loaded / annotation). Recording them again would
+        # double-count toward the miner's non-trivial-call trigger.
+        if tool_name in _SKILL_TOOLKIT_TOOLS:
+            return
+        ids = self._trace_ids()
+        if not ids:
+            return
+        try:
+            step_tracer.record_tool_call(
+                ids[0], ids[1], tool_name, args_summary=args_summary,
+            )
+        except Exception as exc:
+            logger.warning("step_trace tool_call write failed: %s", exc)
+
+    def _trace_tool_result(
+        self, tool_name: str, result_summary: str, was_error: bool
+    ) -> None:
+        if tool_name in _SKILL_TOOLKIT_TOOLS:
+            return
+        ids = self._trace_ids()
+        if not ids:
+            return
+        try:
+            step_tracer.record_tool_result(
+                ids[0], ids[1], tool_name,
+                result_summary=result_summary,
+                was_error=was_error,
+            )
+        except Exception as exc:
+            logger.warning("step_trace tool_result write failed: %s", exc)

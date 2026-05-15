@@ -20,8 +20,7 @@ from app.services.agent_service import build_agent, agent_chat, build_workforce,
 from app.services.task_lock import TaskLock
 from app.agents.factory import create_classifier_agent, classify_question
 from app.services.agent_service import build_model
-from app.services.skill_reviewer import review_insights
-from app.services.skill_logger import skill_logger
+from app.services.skill_evolution import run_post_task_evolution
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +30,19 @@ router = APIRouter(prefix="/api")
 # conversation_history across multiple workforce rounds.
 _active_task_locks: dict[str, TaskLock] = {}
 
-# Strong refs for fire-and-forget post-task skill review tasks.
+# Strong refs for fire-and-forget post-task evolution (Judge + Miner).
 # Kept separate from TaskLock.background_tasks so request cleanup()
-# cannot cancel an in-flight review.
-_review_tasks: set[asyncio.Task] = set()
+# cannot cancel an in-flight evolution run.
+_evolution_tasks: set[asyncio.Task] = set()
 
 
-def _on_review_done(task: asyncio.Task) -> None:
-    _review_tasks.discard(task)
+def _on_evolution_done(task: asyncio.Task) -> None:
+    _evolution_tasks.discard(task)
     if task.cancelled():
         return
     exc = task.exception()
     if exc:
-        logger.warning("Skill review task failed: %s", exc, exc_info=exc)
+        logger.warning("Skill evolution task failed: %s", exc, exc_info=exc)
 
 
 @router.post("/chat")
@@ -164,6 +163,13 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
                             )
                             content = event["data"].get("content", "")
 
+                        # Capture the round index BEFORE we append the
+                        # round's result — the skill toolkit uses the
+                        # length of conversation_history as round_idx
+                        # during the round, so persistance must come
+                        # after we hand off to evolution.
+                        round_idx = len(task_lock.conversation_history)
+
                         # Persist round result for multi-turn context
                         task_lock.conversation_history.append({
                             "task_content": req.message,
@@ -180,24 +186,27 @@ async def chat(req: ChatRequest, db: aiosqlite.Connection = Depends(get_db)):
                             "conversation": conv.model_dump() if conv else None,
                         })
 
-                        # Trigger background skill review if insights exist
+                        # Post-task evolution: Judge every round, update
+                        # utility counters, and (Phase 2b) hand off to
+                        # the Skill Miner. Runs in the background so the
+                        # next chat round isn't blocked.
                         try:
-                            pending = skill_logger.read_pending_insights(req.conversation_id)
-                            if pending:
-                                review_model = build_model(
-                                    provider, model_name, req.api_key, req.api_base, stream=False
+                            judge_model = build_model(
+                                provider, model_name, req.api_key, req.api_base, stream=False
+                            )
+                            evo_task = asyncio.create_task(
+                                run_post_task_evolution(
+                                    conversation_id=req.conversation_id,
+                                    round_idx=round_idx,
+                                    user_query=req.message,
+                                    final_response=content,
+                                    judge_model=judge_model,
                                 )
-                                review_task = asyncio.create_task(
-                                    review_insights(
-                                        conversation_id=req.conversation_id,
-                                        task_summary=content[:2000],
-                                        model=review_model,
-                                    )
-                                )
-                                _review_tasks.add(review_task)
-                                review_task.add_done_callback(_on_review_done)
+                            )
+                            _evolution_tasks.add(evo_task)
+                            evo_task.add_done_callback(_on_evolution_done)
                         except Exception as e:
-                            logger.warning(f"Skill review trigger failed: {e}")
+                            logger.warning(f"Skill evolution trigger failed: {e}")
 
                         break
                     elif event["step"] == "error":
