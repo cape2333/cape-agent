@@ -13,6 +13,7 @@ from app.models.skill_schemas import (
 )
 from app.services.skill_service import skill_service
 from app.services.skill_logger import skill_logger
+from app.services.skill_hygiene import run_hygiene, HygieneReport
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
@@ -33,10 +34,28 @@ async def list_skills(
 @router.get("/stats")
 async def get_stats() -> dict[str, dict]:
     raw = skill_logger.get_stats()
-    return {
-        name: SkillStats(name=name, **data).model_dump()
-        for name, data in raw.items()
-    }
+    out: dict[str, dict] = {}
+    for name, data in raw.items():
+        utility = skill_logger.compute_utility(data)
+        recent_utility = skill_logger.compute_recent_utility(data, days=30)
+        stats = SkillStats(
+            name=name,
+            **{k: v for k, v in data.items() if k in SkillStats.model_fields},
+        )
+        stats.utility = utility
+        stats.recent_utility_30d = recent_utility
+        out[name] = stats.model_dump()
+    return out
+
+
+@router.post("/hygiene", response_model=HygieneReport)
+async def trigger_hygiene() -> HygieneReport:
+    """Run library hygiene: archive low-utility skills, dedup, enforce caps.
+
+    Idempotent and safe to call repeatedly. All actions are soft —
+    archived skills can be re-enabled from the UI.
+    """
+    return run_hygiene()
 
 
 @router.get("/logs")

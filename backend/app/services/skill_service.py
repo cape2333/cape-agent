@@ -122,6 +122,9 @@ class SkillService:
             created_at=fm.get("created_at", ""),
             updated_at=fm.get("updated_at", ""),
             tags=fm.get("tags", []),
+            risk_level=fm.get("risk_level", "low"),
+            dry_run_stop_at=fm.get("dry_run_stop_at"),
+            is_probationary=fm.get("is_probationary", False),
         )
 
     def _list_supporting_files(self, skill_dir: Path) -> list[str]:
@@ -365,15 +368,19 @@ class SkillService:
             "Before executing your task, scan the skills below. If any skill matches\n"
             "your current task, load it with skill_view(name) and follow its instructions.\n\n"
             f"<available_skills>\n{index}\n</available_skills>\n\n"
-            "If a skill you used was wrong or incomplete, update it with skill_manage.\n"
-            "After completing a difficult task (3+ tool calls with retries),\n"
-            "consider saving the approach as a new skill.\n\n"
-            "When you encounter these situations during task execution:\n"
-            "- A retry with a different approach succeeded\n"
-            "- You discovered a pitfall or workaround\n"
-            "- An existing skill's instructions were wrong or incomplete\n\n"
-            "Call mark_insight() to record what you learned.\n"
-            "Do NOT stop to create a full skill — just record the observation and continue your task."
+            "If a skill you used was wrong or incomplete, update it with skill_manage.\n\n"
+            "## When to call mark_insight\n\n"
+            "mark_insight is a free-form annotation channel. It does NOT create or\n"
+            "modify skills directly — annotations ride alongside your trajectory and\n"
+            "are reviewed automatically after the task. Call it whenever you notice\n"
+            "something the raw trace would not reveal:\n"
+            "- A non-obvious mechanism (\"this click is silently swallowed the first time\")\n"
+            "- A hidden constraint (\"the API rate-limits with HTTP 200 + empty body\")\n"
+            "- A user-preference observation (\"when they say 'cheapest' they mean total\n"
+            "  including baggage\")\n"
+            "- A subtle pitfall in an existing skill\n\n"
+            "Annotate freely — the system decides what becomes a skill. Do NOT stop to\n"
+            "create a skill yourself; just record what you saw and keep going."
         )
 
 
